@@ -1,6 +1,6 @@
 import React, { memo } from "react";
 
-const Tabs = memo(({ tabs, activeFileId, files, onTabSelect, onTabClose }) => {
+const Tabs = memo(({ tabs, activeFileId, previewTabId, files, onTabSelect, onTabClose }) => {
   if (!tabs.length) {
     return (
       <div className="tabs-bar tabs-empty">
@@ -15,17 +15,11 @@ const Tabs = memo(({ tabs, activeFileId, files, onTabSelect, onTabClose }) => {
         const node = files.get(tabId);
         const label = node?.name ?? "Untitled";
         const isActive = activeFileId === tabId;
+        const isPreview = previewTabId === tabId;
 
         return (
-          <div
-            key={tabId}
-            className={`tab ${isActive ? "active" : ""}`}
-            role="tab"
-            tabIndex={0}
-            onClick={() => onTabSelect(tabId)}
-            onKeyDown={(event) => event.key === "Enter" && onTabSelect(tabId)}
-          >
-            <span className="tab-label">{label}</span>
+          <div key={tabId} className={`tab ${isActive ? "active" : ""} ${isPreview ? "preview" : ""}`} role="tab" tabIndex={0} onClick={() => onTabSelect(tabId)} onKeyDown={(event) => event.key === "Enter" && onTabSelect(tabId)}>
+            <span className={`tab-label ${isPreview ? "preview-label" : ""}`}>{label}</span>
             <button
               type="button"
               className="tab-close"
@@ -33,8 +27,7 @@ const Tabs = memo(({ tabs, activeFileId, files, onTabSelect, onTabClose }) => {
                 event.stopPropagation();
                 onTabClose(tabId);
               }}
-              aria-label={`Close ${label}`}
-            >
+              aria-label={`Close ${label}`}>
               ×
             </button>
           </div>
