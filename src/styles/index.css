@@ -1,0 +1,103 @@
+/* ─── Design Tokens ─── */
+
+:root {
+  /* Community Material Theme - Darker */
+  --main-bg: #1a1a1a;
+  --sidebar-bg: #1a1a1a;
+  --explorer-bg: #1a1a1a;
+  --tab-bg: #212121;
+  --active-tab-bg: #1a1a1a;
+  --border-color: #2d2d2d;
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0a0;
+  --text-muted: #616161;
+  --hover-bg: #2a2a2a;
+  --active-bg: #3d3d3d;
+  --accent: #82aaff;
+  --accent-hover: #4c8cff;
+  --status-bar-bg: #82aaff;
+  --status-bar-text: #ffffff;
+  --error: #ff5252;
+  --warning: #ffd740;
+  --info: #82aaff;
+  --success: #69f0ae;
+
+  /* Editor Colors */
+  --editor-bg: #1a1a1a;
+  --editor-fg: #e0e0e0;
+  --editor-line-highlight: #212121;
+  --editor-selection: #3d3d3d;
+
+  /* Sidebar resize */
+  --sidebar-resize-handle: #82aaff;
+
+  /* Font Sizes */
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-base: 15px;
+  --font-size-md: 16px;
+  --font-size-lg: 18px;
+}
+
+/* ─── Reset ─── */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--main-bg);
+  font-family: 'JetBrains Mono', 'Fira Code', 'SFMono-Regular', Consolas, Monaco, monospace;
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+}
+
+/* ─── Scrollbar ─── */
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ─── Animations ─── */
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

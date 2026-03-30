@@ -1,0 +1,88 @@
+/* ─── Tab Bar ─── */
+
+.tabs-bar {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  min-height: 36px;
+  background: var(--tab-bg);
+  padding-left: 8px;
+  gap: 1px;
+  overflow-x: auto;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 4px 4px 0 0;
+  border: 1px solid transparent;
+  border-bottom: none;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  background: transparent;
+  max-width: 200px;
+  min-width: 80px;
+  transition: background 0.2s ease;
+}
+
+.tab:hover {
+  background: var(--hover-bg);
+}
+
+.tab.active {
+  background: var(--active-tab-bg);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--active-tab-bg);
+  margin-bottom: -1px;
+}
+
+.tab-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-label.preview-label {
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.tab-close {
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  font-size: var(--font-size-base);
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s;
+}
+
+.tab:hover .tab-close,
+.tab.active .tab-close {
+  opacity: 1;
+}
+
+.tab-close:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.tabs-empty {
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.tabs-placeholder {
+  font-size: var(--font-size-sm);
+}

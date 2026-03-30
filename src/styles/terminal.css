@@ -1,0 +1,179 @@
+/* ─── Terminal Panel ─── */
+
+.terminal {
+  height: 120px;
+  border-top: 1px solid var(--border-color);
+  background: #1a1a1a;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.terminal.animate {
+  transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.terminal.collapsed {
+  height: 30px !important;
+  min-height: 30px !important;
+}
+
+.terminal.maximized {
+  min-height: 0;
+  flex: 1;
+}
+
+/* ─── Resize Handle ─── */
+
+.terminal-resize-handle {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: row-resize;
+  z-index: 10;
+  transition: background 0.2s;
+}
+
+.terminal-resize-handle:hover,
+.terminal-resize-handle.dragging {
+  background: var(--accent);
+}
+
+/* ─── Header ─── */
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  min-height: 40px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.terminal-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.terminal-title {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+}
+
+.terminal-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.terminal-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.terminal-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+/* ─── Window ─── */
+
+.terminal-window {
+  flex: 1;
+  padding: 8px 12px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 13px;
+  overflow-y: auto;
+  background: #0d0d0d;
+  color: #e0e0e0;
+}
+
+.terminal.collapsed .terminal-window {
+  display: none;
+}
+
+.terminal-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.terminal-line {
+  margin: 2px 0;
+  line-height: 1.4;
+}
+
+.terminal-line.command {
+  display: flex;
+  align-items: flex-start;
+}
+
+/* ─── Prompt ─── */
+
+.terminal-prompt-line {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.terminal-prompt-user { color: #4fc1ff; font-weight: 500; }
+.terminal-prompt-at { color: #e0e0e0; }
+.terminal-prompt-host { color: #89ddff; }
+.terminal-prompt-separator { color: #e0e0e0; }
+.terminal-prompt-path { color: #c3e88d; font-weight: 500; }
+.terminal-prompt-symbol { color: #ff5370; margin: 0 6px; }
+.terminal-prompt-command { color: #e0e0e0; white-space: pre-wrap; word-break: break-all; }
+
+.terminal-output {
+  margin: 4px 0 8px 0;
+  padding-left: 0;
+  color: #e0e0e0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* ─── Input ─── */
+
+.terminal-input-line {
+  display: flex;
+  align-items: center;
+  margin-top: 4px;
+  padding-bottom: 8px;
+}
+
+.terminal-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #e0e0e0;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0;
+  margin: 0 0 0 6px;
+  min-width: 50px;
+  caret-color: #4fc1ff;
+}
+
+.terminal-input::placeholder {
+  color: #616161;
+}

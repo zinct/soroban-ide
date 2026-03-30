@@ -1,0 +1,211 @@
+/* ─── Context Menu ─── */
+
+.context-menu {
+  position: fixed;
+  background: #1a1a1a;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 0;
+  min-width: 160px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  animation: fadeIn 0.1s ease;
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.context-menu-item:hover {
+  background: #252525;
+}
+
+.context-menu-item.delete {
+  color: #f87171;
+}
+
+.context-menu-item.delete:hover {
+  background: #3f1f1f;
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 0;
+}
+
+.context-menu-item svg {
+  flex-shrink: 0;
+}
+
+/* ─── Create New Menu ─── */
+
+.create-new-container {
+  position: relative;
+  margin-left: auto;
+  padding: 0 8px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.create-new-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.create-new-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.create-new-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.create-new-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 8px;
+  background: var(--sidebar-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  min-width: 220px;
+  z-index: 1000;
+  overflow: hidden;
+  padding: 4px 0;
+}
+
+.create-new-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  transition: background 0.1s;
+  border: none;
+}
+
+.create-new-item:hover {
+  background: var(--hover-bg);
+}
+
+.create-new-item svg {
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+/* ─── GitHub Clone Dialog ─── */
+
+.github-clone-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.github-clone-dialog {
+  background: var(--sidebar-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 20px;
+  min-width: 420px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.github-clone-dialog h3 {
+  margin: 0 0 16px 0;
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.github-clone-dialog input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  background: var(--editor-bg);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  margin-bottom: 16px;
+  outline: none;
+}
+
+.github-clone-dialog input:focus {
+  border-color: var(--accent);
+}
+
+.github-clone-dialog .dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.github-clone-dialog button {
+  padding: 6px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  transition: background 0.15s;
+  background: #3c3c3c;
+  color: var(--text-primary);
+}
+
+.github-clone-dialog button:hover {
+  background: #4c4c4c;
+}
+
+.github-clone-dialog .btn-clone {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.github-clone-dialog .btn-clone:hover {
+  background: var(--accent-hover);
+}
+
+.github-clone-dialog .clone-status {
+  margin: -8px 0 16px 0;
+  padding: 8px 10px;
+  border-radius: 3px;
+  font-size: var(--font-size-sm);
+}
+
+.github-clone-dialog .clone-status.loading {
+  color: var(--text-secondary);
+}
+
+.github-clone-dialog .clone-status.success {
+  color: #89ddff;
+}
+
+.github-clone-dialog .clone-status.error {
+  color: #ff5370;
+}
