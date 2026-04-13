@@ -1,6 +1,6 @@
 import React from 'react';
 
-const ICONS_BASE = '/src/assets/icons';
+const ICONS_BASE = '/assets/icons';
 
 /* ─── File icon name resolution ─── */
 
