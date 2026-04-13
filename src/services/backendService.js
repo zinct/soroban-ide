@@ -10,6 +10,27 @@
 const API_BASE = import.meta.env.VITE_API_BASE || "/api";
 
 /**
+ * Get or create a persistent session ID stored in localStorage.
+ * This ensures all commands share the same workspace on the backend,
+ * even when frontend and backend are on different domains (cross-origin).
+ */
+const getSessionId = () => {
+  let sid = localStorage.getItem("workspace_session_id");
+  if (!sid) {
+    sid = crypto.randomUUID();
+    localStorage.setItem("workspace_session_id", sid);
+  }
+  return sid;
+};
+
+/**
+ * Reset the session ID (e.g., when creating a brand new project from scratch).
+ */
+export const resetSessionId = () => {
+  localStorage.removeItem("workspace_session_id");
+};
+
+/**
  * Walk the workspace tree and collect all files into a flat
  * { "relative/path": "content" } map for the backend.
  */
@@ -50,9 +71,15 @@ export const submitCommand = async (files, command) => {
   console.log("[backendService] Sending command:", command);
   console.log("[backendService] Files:", Object.keys(files));
 
+  const sessionId = getSessionId();
+  console.log("[backendService] Session ID:", sessionId);
+
   const response = await fetch(`${API_BASE}/run`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Session-ID": sessionId,
+    },
     body: JSON.stringify({ files, command }),
   });
 

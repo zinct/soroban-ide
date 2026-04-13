@@ -403,7 +403,7 @@ const Layout = () => {
               <button className="btn-cancel" onClick={() => setShowCreateDialog(false)}>
                 Cancel
               </button>
-              <button className="btn-clone" onClick={handleCreateProject}>
+              <button className="btn-clone" onClick={() => handleCreateProject()}>
                 Create Project
               </button>
             </div>
