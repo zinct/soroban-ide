@@ -40,7 +40,7 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
   }, [width, isCollapsed]);
   const [isDragging, setIsDragging] = useState(false);
   const [inlineInput, setInlineInput] = useState(null);
-  const [activePanel, setActivePanel] = useState("explorer"); // "explorer" | "github"
+  const [activePanel, setActivePanel] = useState(() => persistedSidebarState?.activePanel || "explorer"); // "explorer" | "github"
   const [contextMenu, setContextMenu] = useState(null);
   const [renameNode, setRenameNode] = useState(null);
   const [dragState, setDragState] = useState({ draggingId: null, dragOverId: null });
@@ -58,8 +58,8 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
   useEffect(() => {
     // If collapsed, we save the lastWidth ref value so it's remembered upon refresh
     const widthToSave = isCollapsed ? lastWidth.current : width;
-    saveStateSection("sidebar", { width: widthToSave, isCollapsed });
-  }, [width, isCollapsed]);
+    saveStateSection("sidebar", { width: widthToSave, isCollapsed, activePanel });
+  }, [width, isCollapsed, activePanel]);
 
   /* ─── Resize handlers ─── */
 
@@ -135,8 +135,9 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
   /* ─── Inline input handlers ─── */
 
   const handleStartNewFile = useCallback((forcedTargetId) => {
-    // 1. Resolve target: forced Id > current selection > project root
-    let targetFolder = forcedTargetId || selectedNodeId || root?.id;
+    // 1. Resolve target: forced Id (if string) > current selection > project root
+    const actualTargetId = (forcedTargetId && typeof forcedTargetId === 'string') ? forcedTargetId : null;
+    let targetFolder = actualTargetId || selectedNodeId || root?.id;
     
     // 2. Clear context menu immediately
     setContextMenu(null);
@@ -163,8 +164,9 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
   }, [selectedNodeId, root, tree, expandedFolders, onToggleFolder]);
 
   const handleStartNewFolder = useCallback((forcedTargetId) => {
-    // 1. Resolve target
-    let targetFolder = forcedTargetId || selectedNodeId || root?.id;
+    // 1. Resolve target: forced Id (if string) > current selection > project root
+    const actualTargetId = (forcedTargetId && typeof forcedTargetId === 'string') ? forcedTargetId : null;
+    let targetFolder = actualTargetId || selectedNodeId || root?.id;
     
     // 2. Clear context menu immediately
     setContextMenu(null);
@@ -273,11 +275,21 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
   const [renameError, setRenameError] = useState(null);
 
   const handleRenameClick = useCallback(() => {
+    let targetNode = null;
     if (contextMenu) {
-      setRenameNode({ id: contextMenu.nodeId, name: contextMenu.nodeName, type: contextMenu.nodeType });
+      targetNode = { id: contextMenu.nodeId, name: contextMenu.nodeName, type: contextMenu.nodeType };
       setContextMenu(null);
+    } else if (selectedNodeId) {
+      const node = getNodeFromTree(tree, selectedNodeId);
+      if (node) {
+        targetNode = { id: node.id, name: node.name, type: node.type };
+      }
     }
-  }, [contextMenu]);
+
+    if (targetNode) {
+      setRenameNode(targetNode);
+    }
+  }, [contextMenu, selectedNodeId, tree]);
 
   const handleRenameSubmit = useCallback(
     (newName) => {
@@ -353,6 +365,18 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
     setContextMenu(null);
   }, [pasteTargetFolder, selectedNodeId, root, onPasteItem]);
 
+  const handleMoveItem = useCallback(
+    (draggedId, targetFolderId) => {
+      if (onMoveItem) {
+        const result = onMoveItem(draggedId, targetFolderId);
+        if (result?.error === "COLLISION") {
+          setRenameError(result.message);
+        }
+      }
+    },
+    [onMoveItem],
+  );
+
   const canPaste = clipboard?.nodeId && clipboard?.operation;
 
   /* ─── Upload handlers ─── */
@@ -395,6 +419,21 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
             setRenameError(result.message);
           }
         }
+      }
+
+      // Delete shortcut
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      if (isMac ? (e.metaKey && e.key === "Backspace") : (e.key === "Delete")) {
+        if (selectedNodeId) {
+          e.preventDefault();
+          onDeleteItem(selectedNodeId);
+        }
+      }
+
+      // Rename shortcut
+      if (e.key === "F2") {
+        e.preventDefault();
+        handleRenameClick();
       }
     };
     window.addEventListener("keydown", handler);
@@ -461,7 +500,7 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
         // Handle internal move to root
         const draggedId = e.dataTransfer.getData("application/soroban-studio-node-id") || dragState?.draggingId;
         if (draggedId && draggedId !== targetFolder) {
-          onMoveItem?.(draggedId, targetFolder);
+          handleMoveItem(draggedId, targetFolder);
         }
       }
       setDragState?.({ draggingId: null, dragOverId: null });
@@ -538,7 +577,7 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
         </div>
 
         {/* Collapsible Panel Section (Right of Activity Bar) */}
-        <div className="sidebar-panel">
+        <div className={`sidebar-panel ${isCollapsed ? "hidden" : ""}`}>
           {activePanel === "github" ? (
             <GitHubPanel treeData={treeData || tree} fileContents={fileContents || {}} />
           ) : root ? (
@@ -616,7 +655,7 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
                       renameNode={renameNode}
                       onRenameSubmit={handleRenameSubmit}
                       onRenameCancel={handleRenameCancel}
-                      onMoveItem={onMoveItem}
+                      onMoveItem={handleMoveItem}
                       onUploadFiles={onUploadFiles}
                       dragState={dragState}
                       setDragState={setDragState}

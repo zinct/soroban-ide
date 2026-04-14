@@ -55,10 +55,8 @@ const ExplorerNode = memo(({ node, depth, tree, expandedFolders, onToggleFolder,
       const hasChildren = node.children?.length > 0;
       const isTargetedByInput = inlineInput?.parentId === node.id;
       
-      // Only toggle if it has children or is about to show an inline input
-      if (hasChildren || isTargetedByInput) {
-        onToggleFolder(node.id);
-      }
+      // Toggle folders regardless of content so chevrons rotate
+      onToggleFolder(node.id);
       onNodeSelect?.(node.id);
     } else {
       onFileSelect(node.id);
@@ -253,7 +251,7 @@ const ExplorerNode = memo(({ node, depth, tree, expandedFolders, onToggleFolder,
           }}
           {...sharedProps}>
           <span className="sidebar-chevron" style={{ position: "absolute", left: `${indent + 12}px` }}>
-            {isFolder && (node.children?.length > 0 || inlineInput?.parentId === node.id) && (isExpanded ? <ChevronDown /> : <ChevronRight />)}
+            {isFolder && (isExpanded ? <ChevronDown /> : <ChevronRight />)}
           </span>
           <span className="sidebar-node-icon">
             <FolderIconImg folderName={node.name} isOpen={isExpanded} size={18} />

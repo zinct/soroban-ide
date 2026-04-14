@@ -111,6 +111,18 @@ export const useWorkspaceState = () => {
       const target = flattenedNodes.get(targetParentId);
       if (!target || target.type !== "folder") return;
 
+      const sourceNode = flattenedNodes.get(nodeId);
+      if (!sourceNode) return;
+
+      // Check for name collision in target folder
+      const isDuplicate = target.children?.some((child) => child.name === sourceNode.name && child.id !== nodeId);
+      if (isDuplicate) {
+        return {
+          error: "COLLISION",
+          message: `A ${sourceNode.type} named "${sourceNode.name}" already exists in the target folder.`,
+        };
+      }
+
       setTreeData((prev) => moveNodeInTree(prev, nodeId, targetParentId));
       setExpandedFolders((prev) => {
         const next = new Set(prev);
@@ -397,7 +409,9 @@ export const useClipboard = (treeData, flattenedNodes, fileContents, setTreeData
         setTreeData((prev) => moveNodeInTree(prev, clipboard.nodeId, targetParentId));
       }
 
-      setClipboard(null);
+      if (clipboard.operation === "cut") {
+        setClipboard(null);
+      }
 
       setExpandedFolders((prev) => {
         const next = new Set(prev);

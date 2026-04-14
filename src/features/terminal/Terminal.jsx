@@ -261,7 +261,7 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
         }
       } else if (e.key === "Tab") {
         e.preventDefault();
-        const commands = ["clear", "pwd", "cd", "ls", "echo", "whoami", "date", "stellar", "soroban", "cargo", "rustc", "rustup", "node", "npm", "npx", "help"];
+        const commands = ["ls", "clear", "stellar", "whoami", "help"];
         const matches = commands.filter((c) => c.startsWith(input.toLowerCase()));
         if (matches.length === 1) setInput(matches[0]);
       } else if (e.key === "l" && e.ctrlKey) {
@@ -365,6 +365,12 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
                 {entry.type !== "command" && <pre className="terminal-output">{renderContentWithLinks(entry.content)}</pre>}
               </div>
             ))}
+            {isRunning && (
+              <div className="terminal-compiling-line">
+                <span>Compiling</span>
+                <span className="terminal-dots"></span>
+              </div>
+            )}
             {!isRunning && (
               <div className="terminal-input-line">
                 <span className="terminal-prompt-line">

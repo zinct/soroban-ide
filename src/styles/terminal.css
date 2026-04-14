@@ -267,3 +267,28 @@
 .terminal-link:hover {
   text-decoration: underline;
 }
+
+/* ─── Compiling Animation ─── */
+
+.terminal-compiling-line {
+  color: #e0e0e0;
+  font-family: inherit;
+  font-size: inherit;
+  margin: 4px 0;
+  display: flex;
+  align-items: center;
+}
+
+.terminal-dots::after {
+  content: "...";
+  display: inline-block;
+  width: 20px;
+  animation: dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes dots {
+  0%, 20% { content: ""; }
+  40% { content: "."; }
+  60% { content: ".."; }
+  80%, 100% { content: "..."; }
+}

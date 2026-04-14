@@ -10,7 +10,7 @@
  * Check if a command should be routed to the backend.
  * Must match backend allowedPrefixes in run.go
  */
-const BACKEND_PREFIXES = ['stellar', 'soroban', 'cargo', 'rustc', 'rustup', 'node', 'npm', 'npx', 'wasm-opt'];
+const BACKEND_PREFIXES = ['stellar'];
 
 export const isBackendCommand = (cmd) => {
   const first = cmd.trim().split(/\s+/)[0]?.toLowerCase();
@@ -73,47 +73,14 @@ export const executeTerminalCommand = (cmd, cwd, setCwd, treeData) => {
   switch (command) {
     case 'help':
       return `Available commands:
-  clear                    - Clear terminal
-  pwd                      - Print working directory
-  cd <dir>                 - Change directory
-  ls                       - List files in current directory
-  echo <text>              - Print text
-  whoami                   - Current user
-  date                     - Current date
+  ls      - List files in current directory
+  clear   - Clear terminal
+  whoami  - Show current user
 
-  stellar contract build   - Build Soroban contract
-  stellar contract deploy  - Deploy contract
-  stellar --version        - Show Stellar CLI version
-  soroban <...>            - Soroban CLI commands
-  cargo build              - Build with Cargo
-  cargo test               - Run tests
-  rustc --version          - Show Rust compiler version
-  rustup <...>             - Manage Rust toolchains
-  node <...>               - Run Node.js
-  npm <...>                - Run npm commands
-  npx <...>                - Run npx commands`;
+  stellar - Run Stellar CLI commands (e.g., stellar contract build)`;
 
     case 'clear':
       return null; // Signal to clear history
-
-    case 'pwd':
-      return cwd;
-
-    case 'cd':
-      if (args.length === 0 || args[0] === '~') {
-        setCwd('~/project');
-      } else if (args[0] === '..') {
-        setCwd((prev) => {
-          const segments = prev.split('/');
-          if (segments.length > 1) segments.pop();
-          return segments.join('/') || '/';
-        });
-      } else {
-        setCwd((prev) => {
-          return args[0].startsWith('/') ? args[0] : `${prev}/${args[0]}`;
-        });
-      }
-      return '';
 
     case 'ls':
       if (treeData) {
@@ -121,17 +88,8 @@ export const executeTerminalCommand = (cmd, cwd, setCwd, treeData) => {
       }
       return '';
 
-    case 'echo':
-      return args.join(' ');
-
     case 'whoami':
       return 'developer';
-
-    case 'date':
-      return new Date().toString();
-
-    case 'cat':
-      return `cat: reading from workspace not yet supported`;
 
     default:
       return `Command not found: ${command}\nType 'help' for available commands.`;
