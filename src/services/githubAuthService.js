@@ -127,7 +127,8 @@ export const getUserInfo = async (token) => {
       clearAuth();
       throw new Error("Token expired. Please reconnect.");
     }
-    throw new Error("Failed to fetch user info");
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.message || `Failed to fetch user info (Status: ${res.status})`);
   }
 
   return res.json();
@@ -143,7 +144,10 @@ export const listUserRepos = async (token, page = 1) => {
     headers: { Authorization: `Bearer ${token}` },
   });
 
-  if (!res.ok) throw new Error("Failed to list repositories");
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.message || `Failed to list repositories (Status: ${res.status})`);
+  }
   return res.json();
 };
 
@@ -241,7 +245,8 @@ export const pushFilesToRepo = async (token, owner, repo, files, message = "Push
     });
 
     if (!blobRes.ok) {
-      throw new Error(`Failed to create blob for ${path}`);
+      const errorData = await blobRes.json().catch(() => ({}));
+      throw new Error(errorData.message || `Failed to create blob for ${path} (Status: ${blobRes.status})`);
     }
 
     const blobData = await blobRes.json();
@@ -267,7 +272,10 @@ export const pushFilesToRepo = async (token, owner, repo, files, message = "Push
     body: JSON.stringify(treeBody),
   });
 
-  if (!treeRes.ok) throw new Error("Failed to create Git tree");
+  if (!treeRes.ok) {
+    const errorData = await treeRes.json().catch(() => ({}));
+    throw new Error(errorData.message || `Failed to create Git tree (Status: ${treeRes.status})`);
+  }
   const treeData = await treeRes.json();
 
   // Step 4: Create commit
@@ -287,7 +295,10 @@ export const pushFilesToRepo = async (token, owner, repo, files, message = "Push
     body: JSON.stringify(commitBody),
   });
 
-  if (!commitRes.ok) throw new Error("Failed to create commit");
+  if (!commitRes.ok) {
+    const errorData = await commitRes.json().catch(() => ({}));
+    throw new Error(errorData.message || `Failed to create commit (Status: ${commitRes.status})`);
+  }
   const commitData = await commitRes.json();
 
   // Step 5: Update branch reference
@@ -300,7 +311,10 @@ export const pushFilesToRepo = async (token, owner, repo, files, message = "Push
       headers,
       body: JSON.stringify({ sha: commitData.sha }),
     });
-    if (!updateRes.ok) throw new Error("Failed to update branch reference");
+    if (!updateRes.ok) {
+      const errorData = await updateRes.json().catch(() => ({}));
+      throw new Error(errorData.message || `Failed to update branch reference (Status: ${updateRes.status})`);
+    }
   } else {
     // Create new ref (first commit to the repo)
     const createRes = await fetch(`${apiBase}/git/refs`, {
@@ -311,7 +325,10 @@ export const pushFilesToRepo = async (token, owner, repo, files, message = "Push
         sha: commitData.sha,
       }),
     });
-    if (!createRes.ok) throw new Error("Failed to create branch reference");
+    if (!createRes.ok) {
+      const errorData = await createRes.json().catch(() => ({}));
+      throw new Error(errorData.message || `Failed to create branch reference (Status: ${createRes.status})`);
+    }
   }
 
   return {

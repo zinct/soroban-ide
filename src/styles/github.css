@@ -105,6 +105,7 @@
 }
 
 .github-device-code {
+  position: relative;
   font-size: 24px;
   font-weight: 700;
   font-family: "SF Mono", "Fira Code", monospace;
@@ -115,6 +116,48 @@
   border: 1px solid var(--border-color);
   border-radius: 6px;
   user-select: all;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.github-device-code:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.github-device-code:active {
+  transform: translateY(0);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.github-code-tooltip {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  animation: tooltipFadeUp 0.3s ease-out forwards;
+  pointer-events: none;
+  letter-spacing: normal;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes tooltipFadeUp {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 .github-device-hint {

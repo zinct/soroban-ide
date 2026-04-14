@@ -24,6 +24,7 @@ const GitHubPanel = memo(({ treeData, fileContents }) => {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [deviceFlowData, setDeviceFlowData] = useState(null);
   const [authError, setAuthError] = useState(null);
+  const [copied, setCopied] = useState(false);
   const abortRef = useRef(null);
 
   // Panel state
@@ -105,7 +106,16 @@ const GitHubPanel = memo(({ treeData, fileContents }) => {
     abortRef.current?.abort();
     setIsLoggingIn(false);
     setDeviceFlowData(null);
+    setCopied(false);
   }, []);
+
+  const handleCopyCode = useCallback(() => {
+    if (deviceFlowData?.user_code) {
+      navigator.clipboard.writeText(deviceFlowData.user_code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }, [deviceFlowData]);
 
   const handleLogout = useCallback(() => {
     clearAuth();
@@ -241,7 +251,10 @@ const GitHubPanel = memo(({ treeData, fileContents }) => {
                 <p className="github-device-instruction">
                   Enter this code on GitHub:
                 </p>
-                <div className="github-device-code">{deviceFlowData.user_code}</div>
+                <div className="github-device-code" onClick={handleCopyCode} title="Click to copy">
+                  {deviceFlowData.user_code}
+                  {copied && <span className="github-code-tooltip">Copied!</span>}
+                </div>
                 <p className="github-device-hint">
                   A new tab has been opened. If not,{" "}
                   <a
