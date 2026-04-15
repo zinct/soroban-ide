@@ -390,7 +390,14 @@ const GitHubPanel = memo(({ treeData, fileContents }) => {
         {/* Create repo view */}
         {activeView === "create" && !isPushing && (
           <div className="github-create-form">
-            <button className="github-back-btn" onClick={() => setActiveView("main")}>
+            <button
+              className="github-back-btn"
+              onClick={() => {
+                setActiveView("main");
+                setPushError(null);
+                setPushResult(null);
+              }}
+            >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="15 18 9 12 15 6" />
               </svg>
@@ -446,7 +453,14 @@ const GitHubPanel = memo(({ treeData, fileContents }) => {
         {/* Existing repos view */}
         {activeView === "existing" && !isPushing && (
           <div className="github-existing-form">
-            <button className="github-back-btn" onClick={() => setActiveView("main")}>
+            <button
+              className="github-back-btn"
+              onClick={() => {
+                setActiveView("main");
+                setPushError(null);
+                setPushResult(null);
+              }}
+            >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="15 18 9 12 15 6" />
               </svg>

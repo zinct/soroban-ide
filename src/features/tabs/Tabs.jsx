@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo } from "react";
 
 /**
  * Tab bar component for open editor files.
@@ -16,20 +16,13 @@ const Tabs = memo(({ tabs, activeFileId, previewTabId, files, onTabSelect, onTab
     <div className="tabs-bar tabs-filled">
       {tabs.map((tabId) => {
         const node = files.get(tabId);
-        const label = node?.name ?? 'Untitled';
+        const label = node?.name ?? "Untitled";
         const isActive = activeFileId === tabId;
         const isPreview = previewTabId === tabId;
 
         return (
-          <div
-            key={tabId}
-            className={`tab ${isActive ? 'active' : ''} ${isPreview ? 'preview' : ''}`}
-            role="tab"
-            tabIndex={0}
-            onClick={() => onTabSelect(tabId)}
-            onKeyDown={(e) => e.key === 'Enter' && onTabSelect(tabId)}
-          >
-            <span className={`tab-label ${isPreview ? 'preview-label' : ''}`}>{label}</span>
+          <div key={tabId} className={`tab ${isActive ? "active" : ""} ${isPreview ? "preview" : ""}`} role="tab" tabIndex={0} onClick={() => onTabSelect(tabId)} onKeyDown={(e) => e.key === "Enter" && onTabSelect(tabId)}>
+            <span className={`tab-label ${isPreview ? "preview-label" : ""}`}>{label}</span>
             <button
               type="button"
               className="tab-close"
@@ -37,8 +30,7 @@ const Tabs = memo(({ tabs, activeFileId, previewTabId, files, onTabSelect, onTab
                 e.stopPropagation();
                 onTabClose(tabId);
               }}
-              aria-label={`Close ${label}`}
-            >
+              aria-label={`Close ${label}`}>
               ×
             </button>
           </div>

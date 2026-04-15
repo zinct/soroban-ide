@@ -1,7 +1,7 @@
 import React, { memo, useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { loadState, saveStateSection } from "../../utils/storage";
 import { executeTerminalCommand, isBackendCommand } from "./terminalCommands";
-import { collectProjectFiles, submitCommand, connectBuildStream } from "../../services/backendService";
+import { collectProjectFiles, submitCommand, connectBuildStream, killCommand } from "../../services/backendService";
 
 const MIN_HEIGHT = 28;
 const COLLAPSE_THRESHOLD = 60;
@@ -37,6 +37,7 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
   const windowEndRef = useRef(null);
   const previousHeight = useRef(DEFAULT_HEIGHT);
   const wsCleanupRef = useRef(null);
+  const activeJobIdRef = useRef(null);
   const lastSessionIdRef = useRef(null);
 
   // Save state without maximized
@@ -90,6 +91,8 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
 
         // Submit to backend with the exact command the user typed
         const { sessionId, jobId } = await submitCommand(files, cmd, cwd);
+        activeJobIdRef.current = jobId;
+        lastSessionIdRef.current = sessionId;
 
         // Connect WebSocket for streaming output — filtered by jobId
         // so only output from THIS specific command appears in the terminal
@@ -279,22 +282,34 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
         e.preventDefault();
         setHistory([]);
       } else if (e.key === "c" && e.ctrlKey) {
-        // Selection-aware Ctrl+C
+        // Selection-aware Ctrl+C: if text is selected, allow browser to copy.
+        // Otherwise, perform terminal reset/kill (SIGINT).
         const selection = window.getSelection()?.toString();
         if (selection) {
-          // Allow browser default copy behavior
           return;
         }
 
+        e.preventDefault();
         if (isRunning) {
-          // Ctrl+C to cancel running command only if no text is selected
+          // SIGINT: kill the running backend process
           e.preventDefault();
+          
+          if (activeJobIdRef.current && lastSessionIdRef.current) {
+            killCommand(lastSessionIdRef.current, activeJobIdRef.current);
+          }
+
           if (wsCleanupRef.current) {
             wsCleanupRef.current();
             wsCleanupRef.current = null;
           }
           setIsRunning(false);
+          activeJobIdRef.current = null;
           setHistory((prev) => [...prev, { type: "error", content: "^C — cancelled" }]);
+        } else {
+          // Reset: clear the current input line and show ^C
+          const currentInput = input;
+          setHistory((prev) => [...prev, { type: "command", content: currentInput + "^C", cwd: getShortPath(cwd) }]);
+          setInput("");
         }
       }
     },
@@ -376,14 +391,8 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
                 {entry.type !== "command" && <pre className="terminal-output">{renderContentWithLinks(entry.content)}</pre>}
               </div>
             ))}
-            {isRunning && (
-              <div className="terminal-compiling-line">
-                <span>Compiling</span>
-                <span className="terminal-dots"></span>
-              </div>
-            )}
-            {!isRunning && (
-              <div className="terminal-input-line">
+            <div className={`terminal-input-line ${isRunning ? "compiling" : ""}`}>
+              {!isRunning ? (
                 <span className="terminal-prompt-line">
                   <span className="terminal-prompt-user">soroban</span>
                   <span className="terminal-prompt-at">@</span>
@@ -392,9 +401,26 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
                   <span className="terminal-prompt-path">{getShortPath(cwd)}</span>
                   <span className="terminal-prompt-symbol">$</span>
                 </span>
-                <input ref={inputRef} type="text" className="terminal-input" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} spellCheck="false" autoComplete="off" autoFocus disabled={isRunning} placeholder={isRunning ? "Build in progress..." : ""} />
-              </div>
-            )}
+              ) : (
+                <div className="terminal-compiling-line">
+                  <span>Compiling</span>
+                  <span className="terminal-dots"></span>
+                </div>
+              )}
+              <input 
+                ref={inputRef} 
+                type="text" 
+                className="terminal-input" 
+                value={isRunning ? "" : input} 
+                onChange={(e) => setInput(e.target.value)} 
+                onKeyDown={handleKeyDown} 
+                spellCheck="false" 
+                autoComplete="off" 
+                autoFocus 
+                readOnly={isRunning} 
+                placeholder={isRunning ? "Press Ctrl+C to cancel..." : ""} 
+              />
+            </div>
             <div ref={windowEndRef} />
           </div>
         </div>

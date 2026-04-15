@@ -280,7 +280,7 @@ const Layout = () => {
         </div>
 
         <div className="workspace">
-          <div style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--border-color)", background: "var(--tab-bg)" }}>
+          <div className="workspace-header">
             <Tabs tabs={tabManager.tabs} activeFileId={tabManager.activeFileId} previewTabId={tabManager.previewTabId} files={workspace.flattenedNodes} onTabSelect={tabManager.setActiveFileId} onTabClose={tabManager.closeTab} />
 
             <div className="create-new-container" ref={createMenuRef}>
@@ -289,7 +289,7 @@ const Layout = () => {
                   <line x1="12" y1="5" x2="12" y2="19" />
                   <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
-                <span className="create-new-label">Create Project</span>
+                <span className="create-new-label">Create New Project</span>
               </button>
               {showCreateMenu && (
                 <div className="create-new-dropdown">

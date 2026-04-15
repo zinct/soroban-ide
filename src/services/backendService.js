@@ -128,6 +128,37 @@ export const submitCommand = async (files, command, cwd = "~/project") => {
   return { sessionId: data.session_id, jobId: data.job_id };
 };
 
+/**
+ * Sends a kill signal to the backend to stop a running job.
+ * @param {string} sessionId
+ * @param {string} jobId
+ */
+export const killCommand = async (sessionId, jobId) => {
+  if (!sessionId || !jobId) return;
+
+  try {
+    const response = await fetch(`${API_BASE}/kill`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Session-ID": sessionId,
+      },
+      body: JSON.stringify({
+        session_id: sessionId,
+        job_id: jobId,
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn("[backendService] Kill request failed:", await response.text());
+    } else {
+      console.log(`[backendService] Kill signal sent for job: ${jobId}`);
+    }
+  } catch (err) {
+    console.error("[backendService] Error sending kill signal:", err);
+  }
+};
+
 // Keep old name as alias for backward compatibility
 export const submitBuild = (files) => submitCommand(files, "stellar contract build");
 

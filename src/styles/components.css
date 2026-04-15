@@ -260,12 +260,13 @@
 
 .github-clone-dialog .btn-clone {
   background: var(--accent);
-  color: white;
-  border-color: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
 }
 
 .github-clone-dialog .btn-clone:hover {
   background: var(--accent-hover);
+  border-color: var(--text-muted);
 }
 
 .github-clone-dialog .btn-clone:disabled {
@@ -284,7 +285,7 @@
 }
 
 .github-clone-dialog .clone-status.success {
-  color: #4caf50;
+  color: var(--text-secondary);
 }
 
 .github-clone-dialog .clone-status.error {

@@ -13,14 +13,14 @@
   --text-muted: #616161;
   --hover-bg: #2a2a2a;
   --active-bg: #3d3d3d;
-  --accent: #82aaff;
-  --accent-hover: #4c8cff;
-  --status-bar-bg: #82aaff;
-  --status-bar-text: #ffffff;
-  --error: #ff5252;
+  --accent: #4a4a4a;
+  --accent-hover: #5a5a5a;
+  --status-bar-bg: #1a1a1a;
+  --status-bar-text: #a0a0a0;
+  --error: #f44336;
   --warning: #ffd740;
-  --info: #82aaff;
-  --success: #69f0ae;
+  --info: #4a4a4a;
+  --success: #4a4a4a;
 
   /* Editor Colors */
   --editor-bg: #1a1a1a;
@@ -30,6 +30,9 @@
 
   /* Sidebar resize */
   --sidebar-resize-handle: #82aaff;
+
+  /* UI Dimensions */
+  --header-height: 48px;
 
   /* Font Sizes */
   --font-size-xs: 12px;
@@ -74,7 +77,6 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-secondary);
 }
-
 ::-webkit-scrollbar-corner {
   background: transparent;
 }
@@ -101,4 +103,15 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* ─── Layout Components ─── */
+
+.workspace-header {
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--tab-bg);
+  overflow: hidden;
 }

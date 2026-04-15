@@ -160,10 +160,11 @@
 /* ─── Header ─── */
 
 .sidebar-header {
+  height: var(--header-height);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--border-color);
   background: var(--sidebar-bg);
   overflow: visible;

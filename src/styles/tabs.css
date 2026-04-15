@@ -4,7 +4,7 @@
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--border-color);
-  min-height: 36px;
+  height: 100%;
   background: var(--tab-bg);
   padding-left: 8px;
   gap: 1px;
