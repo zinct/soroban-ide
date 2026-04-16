@@ -1,0 +1,166 @@
+/* ─── Settings Page Styles ─── */
+
+.settings-panel {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  background: var(--editor-bg);
+  animation: fadeIn 0.3s ease;
+  color: var(--text-primary);
+}
+
+.settings-nav {
+  width: 260px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border-color);
+  padding: 24px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-nav-title {
+  padding: 0 24px 16px 24px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.settings-nav-item {
+  padding: 8px 24px;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+  border-left: 2px solid transparent;
+}
+
+.settings-nav-item:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.settings-nav-item.active {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+  border-left-color: var(--accent-hover);
+}
+
+.settings-content {
+  flex: 1;
+  padding: 40px 60px;
+  overflow-y: auto;
+  max-width: 1000px;
+}
+
+.settings-header {
+  margin-bottom: 32px;
+}
+
+.settings-header h2 {
+  font-size: 24px;
+  font-weight: 400;
+  margin: 0 0 8px 0;
+}
+
+.settings-header p {
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.settings-section {
+  margin-bottom: 48px;
+}
+
+.settings-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+  margin-bottom: 20px;
+  color: var(--text-primary);
+}
+
+.settings-item {
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-item-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.settings-item-description {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.settings-control {
+  margin-top: 4px;
+}
+
+/* Theme Grid */
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.theme-card {
+  border: 2px solid var(--border-color);
+  border-radius: 6px;
+  padding: 12px;
+  cursor: pointer;
+  background: var(--sidebar-bg);
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.theme-card:hover {
+  border-color: var(--text-muted);
+  transform: translateY(-2px);
+}
+
+.theme-card.active {
+  border-color: var(--accent-hover);
+  background: var(--hover-bg);
+}
+
+.theme-preview {
+  width: 100%;
+  height: 60px;
+  border-radius: 4px;
+  display: flex;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.preview-sidebar { width: 30%; height: 100%; }
+.preview-editor { width: 70%; height: 100%; }
+
+.theme-card span {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Theme Previews */
+.preview-dark .preview-sidebar { background: #1a1a1a; }
+.preview-dark .preview-editor { background: #212121; }
+
+.preview-light .preview-sidebar { background: #f3f3f3; }
+.preview-light .preview-editor { background: #ffffff; }
+
+.preview-midnight .preview-sidebar { background: #000000; }
+.preview-midnight .preview-editor { background: #080808; }
+
+.preview-monochrome .preview-sidebar { background: #121212; }
+.preview-monochrome .preview-editor { background: #1a1a1a; }

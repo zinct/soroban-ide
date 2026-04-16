@@ -15,6 +15,8 @@ import Editor from "../features/editor/Editor";
 import Terminal from "../features/terminal/Terminal";
 import { getLanguageFromName, getLanguageDisplayName } from "../features/editor/editorUtils";
 import { cloneNodeWithNewIds, addNodeToTree, moveNodeInTree } from "../features/workspace/workspaceUtils";
+import SettingsPanel from "../features/settings/SettingsPanel";
+import "../styles/settings.css";
 
 /**
  * Main Layout — the slim orchestrator.
@@ -33,6 +35,8 @@ const Layout = () => {
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const initializationStartedRef = useRef(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
   const createMenuRef = useRef(null);
   const setFileContentsRef = useRef(workspace.setFileContents);
   const previewTabIdRef = useRef(tabManager.previewTabId);
@@ -51,6 +55,11 @@ const Layout = () => {
     activeFileIdRef.current = tabManager.activeFileId;
   }, [tabManager.activeFileId]);
   
+  // Apply theme to document
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
 
   // Derived state
   const activeFile = tabManager.activeFileId ? workspace.flattenedNodes.get(tabManager.activeFileId) : null;
@@ -242,92 +251,100 @@ const Layout = () => {
   return (
     <div className="app-shell">
       <div className="app-main">
-        <Sidebar 
-          tree={workspace.treeData} 
-          expandedFolders={workspace.expandedFolders} 
-          onToggleFolder={workspace.toggleFolder} 
-          onFileSelect={(id) => {
-            tabManager.selectFile(id);
-            setSelectedNodeId(id);
-          }} 
-          onNodeSelect={setSelectedNodeId}
-          onNewFile={(name, parentId) => handleNewItem("file", name, parentId)} 
-          onNewFolder={(name, parentId) => handleNewItem("folder", name, parentId)} 
-          onDeleteItem={handleDeleteItem} 
-          onRenameItem={workspace.renameItem} 
-          onMoveItem={workspace.moveItem} 
-          onUploadFiles={workspace.uploadFiles} 
-          onCopyItem={workspace.clipboard.copyItem} 
-          onCutItem={workspace.clipboard.cutItem} 
-          onPasteItem={workspace.clipboard.pasteItem} 
-          clipboard={workspace.clipboard.clipboard} 
-          onCollapseAll={workspace.collapseAll} 
-          activeFileId={tabManager.activeFileId} 
-          selectedNodeId={selectedNodeId}
-          lastSessionId={lastSessionId} 
-          setTreeData={workspace.setTreeData} 
-          treeData={workspace.treeData}
-          fileContents={workspace.fileContents}
-        />
+        {isSettingsOpen ? (
+          <SettingsPanel currentTheme={theme} onThemeChange={setTheme} onClose={() => setIsSettingsOpen(false)} />
+        ) : (
+          <>
+            <Sidebar 
+              tree={workspace.treeData} 
+              expandedFolders={workspace.expandedFolders} 
+              onToggleFolder={workspace.toggleFolder} 
+              onFileSelect={(id) => {
+                tabManager.selectFile(id);
+                setSelectedNodeId(id);
+              }} 
+              onNodeSelect={setSelectedNodeId}
+              onNewFile={(name, parentId) => handleNewItem("file", name, parentId)} 
+              onNewFolder={(name, parentId) => handleNewItem("folder", name, parentId)} 
+              onDeleteItem={handleDeleteItem} 
+              onRenameItem={workspace.renameItem} 
+              onMoveItem={workspace.moveItem} 
+              onUploadFiles={workspace.uploadFiles} 
+              onCopyItem={workspace.clipboard.copyItem} 
+              onCutItem={workspace.clipboard.cutItem} 
+              onPasteItem={workspace.clipboard.pasteItem} 
+              clipboard={workspace.clipboard.clipboard} 
+              onCollapseAll={workspace.collapseAll} 
+              activeFileId={tabManager.activeFileId} 
+              selectedNodeId={selectedNodeId}
+              lastSessionId={lastSessionId} 
+              setTreeData={workspace.setTreeData} 
+              treeData={workspace.treeData}
+              fileContents={workspace.fileContents}
+              isSettingsOpen={isSettingsOpen}
+              onToggleSettings={() => setIsSettingsOpen(!isSettingsOpen)}
+            />
 
-        {/* Project Creation Loading Overlay - Glass Blur */}
-        <div className={`project-creation-overlay ${isCreatingProject ? 'visible' : ""}`}>
-          <div className="project-creation-content">
-            <div className="loading-spinner"></div>
-            <div className="loading-text">Creating Soroban Project...</div>
-            <div className="loading-subtext">Initializing template from backend...</div>
-          </div>
-        </div>
-
-        <div className="workspace">
-          <div className="workspace-header">
-            <Tabs tabs={tabManager.tabs} activeFileId={tabManager.activeFileId} previewTabId={tabManager.previewTabId} files={workspace.flattenedNodes} onTabSelect={tabManager.setActiveFileId} onTabClose={tabManager.closeTab} />
-
-            <div className="create-new-container" ref={createMenuRef}>
-              <button className="create-new-btn" onClick={() => setShowCreateMenu(!showCreateMenu)} title="Create New...">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                <span className="create-new-label">Create New Project</span>
-              </button>
-              {showCreateMenu && (
-                <div className="create-new-dropdown">
-                  <div className="create-new-item" onClick={() => { handleCreateProject("hello-world"); setShowCreateMenu(false); }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                      <polyline points="14 2 14 8 20 8" />
-                    </svg>
-                    Create Hello World
-                  </div>
-                  <div className="create-new-item" onClick={() => { handleCreateProject("stellar-workshop"); setShowCreateMenu(false); }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                      <polyline points="14 2 14 8 20 8" />
-                    </svg>
-                    Create Workshop Template
-                  </div>
-                  <div className="create-new-item" onClick={handleOpenGithubClone}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
-                    </svg>
-                    Clone from GitHub
-                  </div>
-                </div>
-              )}
+            {/* Project Creation Loading Overlay - Glass Blur */}
+            <div className={`project-creation-overlay ${isCreatingProject ? 'visible' : ""}`}>
+              <div className="project-creation-content">
+                <div className="loading-spinner"></div>
+                <div className="loading-text">Creating Soroban Project...</div>
+                <div className="loading-subtext">Initializing template from backend...</div>
+              </div>
             </div>
-          </div>
 
-          <div className="editor-area">
-            <Editor fileId={tabManager.activeFileId} filePath={activeFile?.path} content={activeContent} language={language} onChange={handleEditorChange} onCursorChange={handleCursorChange} />
-          </div>
+            <div className="workspace">
+              <div className="workspace-header">
+                <Tabs tabs={tabManager.tabs} activeFileId={tabManager.activeFileId} previewTabId={tabManager.previewTabId} files={workspace.flattenedNodes} onTabSelect={tabManager.setActiveFileId} onTabClose={tabManager.closeTab} />
 
-          <Terminal 
-            activeFileName={activeFile?.path} 
-            treeData={workspace.treeData} 
-            fileContents={workspace.fileContents} 
-          />
-        </div>
+                <div className="create-new-container" ref={createMenuRef}>
+                  <button className="create-new-btn" onClick={() => setShowCreateMenu(!showCreateMenu)} title="Create New...">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    <span className="create-new-label">Create New Project</span>
+                  </button>
+                  {showCreateMenu && (
+                    <div className="create-new-dropdown">
+                      <div className="create-new-item" onClick={() => { handleCreateProject("hello-world"); setShowCreateMenu(false); }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                        </svg>
+                        Create Hello World
+                      </div>
+                      <div className="create-new-item" onClick={() => { handleCreateProject("stellar-workshop"); setShowCreateMenu(false); }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                        </svg>
+                        Create Workshop Template
+                      </div>
+                      <div className="create-new-item" onClick={handleOpenCreateProject}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+                        </svg>
+                        Clone from GitHub
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="editor-area">
+                <Editor fileId={tabManager.activeFileId} filePath={activeFile?.path} content={activeContent} language={language} theme={theme} onChange={handleEditorChange} onCursorChange={handleCursorChange} />
+              </div>
+
+              <Terminal 
+                activeFileName={activeFile?.path} 
+                treeData={workspace.treeData} 
+                fileContents={workspace.fileContents} 
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {/* Status bar - full width at bottom */}
