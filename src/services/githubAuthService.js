@@ -202,7 +202,6 @@ const formatGithubError = (data, defaultMsg) => {
       return JSON.stringify(err);
     }).join(", ");
     
-    // If we have specific details, prioritize them over generic "Validation Failed" messages
     if (details) return details;
   }
   
@@ -213,14 +212,6 @@ const formatGithubError = (data, defaultMsg) => {
 
 /**
  * Push all workspace files to a GitHub repo using the Git Trees API.
- * Creates a single commit with all files (atomic).
- *
- * @param {string} token - GitHub access token
- * @param {string} owner - Repository owner
- * @param {string} repo - Repository name
- * @param {Object} files - { "path/to/file": "content" }
- * @param {string} message - Commit message
- * @param {Function} onProgress - Optional progress callback (step, total, detail)
  */
 export const pushFilesToRepo = async (token, owner, repo, files, message = "Push from Soroban Studio", onProgress, branch = "main") => {
   const headers = {
@@ -237,24 +228,60 @@ export const pushFilesToRepo = async (token, owner, repo, files, message = "Push
   let baseTreeSha = null;
 
   try {
-    const refRes = await fetch(`${apiBase}/git/ref/heads/${branch}`, { headers });
+    console.log(`[GitHub Service] Checking state for branch '${branch}' in ${owner}/${repo}...`);
+    let refRes = await fetch(`${apiBase}/git/ref/heads/${branch}`, { headers });
+    
+    if (refRes.status === 409 || refRes.status === 404) {
+      // 409 = Git Repository is empty (no commits yet). 
+      // WE MUST SEED IT using the Contents API first because Git Data API fails on empty repos.
+      console.log(`[GitHub Service] Repository is truly empty. Seeding initial commit...`);
+      
+      const filePaths = Object.keys(files);
+      if (filePaths.length === 0) throw new Error("No files to push.");
+      
+      // Pick a file to seed (e.g. .gitignore or the first file found)
+      const seedPath = filePaths.find(p => p.includes('.gitignore')) || filePaths[0];
+      const seedContent = files[seedPath];
+      const isBinary = isBinaryFile(seedPath);
+
+      console.log(`[GitHub Service] Seeding with file: ${seedPath}`);
+      const seedRes = await fetch(`${apiBase}/contents/${seedPath}`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          message: "Initial seed commit",
+          content: isBinary ? seedContent : btoa(seedContent),
+          branch: branch
+        })
+      });
+
+      if (!seedRes.ok) {
+        const seedError = await seedRes.json().catch(() => ({}));
+        throw new Error(`Failed to seed empty repository: ${formatGithubError(seedError, seedRes.status)}`);
+      }
+      
+      console.log(`[GitHub Service] Repository seeded successfully. Refreshing state...`);
+      // Refresh ref status after seeding
+      refRes = await fetch(`${apiBase}/git/ref/heads/${branch}`, { headers });
+    }
+
     if (refRes.ok) {
       const refData = await refRes.json();
       latestCommitSha = refData.object.sha;
+      console.log(`[GitHub Service] Found latest commit: ${latestCommitSha}`);
 
-      // Get the tree of the latest commit
       const commitRes = await fetch(`${apiBase}/git/commits/${latestCommitSha}`, { headers });
       if (commitRes.ok) {
         const commitData = await commitRes.json();
         baseTreeSha = commitData.tree.sha;
+        console.log(`[GitHub Service] Found base tree: ${baseTreeSha}`);
       }
-    } else if (refRes.status === 409 || refRes.status === 404) {
-      // 409 = Git Repository is empty (no commits yet)
-      // 404 = Branch doesn't exist
-      console.log(`[GitHub Service] Repository is empty or branch '${branch}' not found. Starting fresh.`);
+    } else {
+      const errorData = await refRes.json().catch(() => ({}));
+      throw new Error(formatGithubError(errorData, `Failed to check repository state (Status: ${refRes.status})`));
     }
   } catch (err) {
-    console.warn("[GitHub Service] Step 1 failed, assuming empty repo:", err);
+    throw err;
   }
 
   // Step 2: Create blobs for each file
@@ -263,10 +290,13 @@ export const pushFilesToRepo = async (token, owner, repo, files, message = "Push
   const treeItems = [];
   const filePaths = Object.keys(files);
 
+  if (filePaths.length === 0) {
+    throw new Error("No files found to push.");
+  }
+
   for (let i = 0; i < filePaths.length; i++) {
     const path = filePaths[i];
     const content = files[path];
-
     const isBinary = isBinaryFile(path);
 
     const blobRes = await fetch(`${apiBase}/git/blobs`, {
@@ -280,7 +310,7 @@ export const pushFilesToRepo = async (token, owner, repo, files, message = "Push
 
     if (!blobRes.ok) {
       const errorData = await blobRes.json().catch(() => ({}));
-      throw new Error(formatGithubError(errorData, `Failed to create blob for ${path} (Status: ${blobRes.status})`));
+      throw new Error(formatGithubError(errorData, `Failed to upload ${path} (Status: ${blobRes.status})`));
     }
 
     const blobData = await blobRes.json();
@@ -296,6 +326,7 @@ export const pushFilesToRepo = async (token, owner, repo, files, message = "Push
   onProgress?.(3, 5, "Creating file tree...");
 
   const treeBody = { tree: treeItems };
+  // ONLY include base_tree if it actually exists. Omit it for the first commit.
   if (baseTreeSha) {
     treeBody.base_tree = baseTreeSha;
   }
@@ -308,7 +339,8 @@ export const pushFilesToRepo = async (token, owner, repo, files, message = "Push
 
   if (!treeRes.ok) {
     const errorData = await treeRes.json().catch(() => ({}));
-    throw new Error(formatGithubError(errorData, `Failed to create Git tree (Status: ${treeRes.status})`));
+    const detail = formatGithubError(errorData, "");
+    throw new Error(`Git Tree Creation Failed: ${detail || `Status ${treeRes.status}`}`);
   }
   const treeData = await treeRes.json();
 
@@ -319,6 +351,7 @@ export const pushFilesToRepo = async (token, owner, repo, files, message = "Push
     message,
     tree: treeData.sha,
   };
+  // ONLY include parents if latestCommitSha exists. Omit for the root commit.
   if (latestCommitSha) {
     commitBody.parents = [latestCommitSha];
   }
@@ -347,10 +380,11 @@ export const pushFilesToRepo = async (token, owner, repo, files, message = "Push
     });
     if (!updateRes.ok) {
       const errorData = await updateRes.json().catch(() => ({}));
-      throw new Error(formatGithubError(errorData, `Failed to update branch reference (Status: ${updateRes.status})`));
+      throw new Error(formatGithubError(errorData, `Failed to update branch '${branch}' (Status: ${updateRes.status})`));
     }
   } else {
     // Create new ref (first commit to the repo)
+    console.log(`[GitHub Service] Creating initial reference for branch '${branch}'...`);
     const createRes = await fetch(`${apiBase}/git/refs`, {
       method: "POST",
       headers,
@@ -359,9 +393,24 @@ export const pushFilesToRepo = async (token, owner, repo, files, message = "Push
         sha: commitData.sha,
       }),
     });
+
     if (!createRes.ok) {
       const errorData = await createRes.json().catch(() => ({}));
-      throw new Error(formatGithubError(errorData, `Failed to create branch reference (Status: ${createRes.status})`));
+      const detail = formatGithubError(errorData, "");
+      // If reference already exists (rare race condition), try to PATCH it instead
+      if (detail?.includes("already exists") || createRes.status === 422) {
+        console.log(`[GitHub Service] Branch '${branch}' already exists. Attempting PATCH instead.`);
+        const patchRes = await fetch(`${apiBase}/git/refs/heads/${branch}`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ sha: commitData.sha }),
+        });
+        if (!patchRes.ok) {
+          throw new Error(`Failed to update branch '${branch}' (Status: ${patchRes.status})`);
+        }
+      } else {
+        throw new Error(`Failed to initialize branch '${branch}': ${detail || `Status ${createRes.status}`}`);
+      }
     }
   }
 

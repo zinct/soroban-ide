@@ -1,32 +1,44 @@
 /* ─── Design Tokens ─── */
 
 :root {
-  /* Community Material Theme - Darker */
-  --main-bg: #1a1a1a;
-  --sidebar-bg: #1a1a1a;
-  --explorer-bg: #1a1a1a;
-  --tab-bg: #212121;
-  --active-tab-bg: #1a1a1a;
-  --border-color: #2d2d2d;
-  --text-primary: #e0e0e0;
-  --text-secondary: #a0a0a0;
-  --text-muted: #616161;
-  --hover-bg: #2a2a2a;
-  --active-bg: #3d3d3d;
-  --accent: #4a4a4a;
-  --accent-hover: #5a5a5a;
-  --status-bar-bg: #1a1a1a;
-  --status-bar-text: #a0a0a0;
-  --error: #f44336;
-  --warning: #ffd740;
-  --info: #4a4a4a;
-  --success: #4a4a4a;
+  /* Default: Community Material Theme - Darker */
+  --main-bg: #0d0d0d;
+  --sidebar-bg: #0d0d0d;
+  --explorer-bg: #0d0d0d;
+  --tab-bg: #141414;
+  --active-tab-bg: #0d0d0d;
+  --border-color: #1a1a1a;
+  --text-primary: #f0f0f0;
+  --text-secondary: #b0b0b0;
+  --text-muted: #505050;
+  --hover-bg: #141414;
+  --active-bg: #1a1a1a;
+  --accent: #ffffff;
+  --accent-hover: #ffffff;
+  --status-bar-bg: #0d0d0d;
+  --status-bar-text: #808080;
+  --error: #cf6679;
+  --warning: #ffb74d;
+  --info: #808080;
+  --success: #808080;
 
   /* Editor Colors */
   --editor-bg: #1a1a1a;
   --editor-fg: #e0e0e0;
   --editor-line-highlight: #212121;
   --editor-selection: #3d3d3d;
+  
+  /* Terminal Tokens */
+  --term-bg: #1a1a1a;
+  --term-win-bg: #0d0d0d;
+  --term-fg: #e0e0e0;
+  --term-user: #4fc1ff;
+  --term-path: #c3e88d;
+  --term-symbol: #ff5370;
+  --term-accent: #89ddff;
+  --term-error: #ff5370;
+  --term-info: #89ddff;
+  --term-muted: #616161;
 
   /* Sidebar resize */
   --sidebar-resize-handle: #82aaff;
@@ -38,8 +50,78 @@
   --font-size-xs: 12px;
   --font-size-sm: 14px;
   --font-size-base: 15px;
-  --font-size-md: 16px;
-  --font-size-lg: 18px;
+}
+
+[data-theme="light"] {
+  --main-bg: #ffffff;
+  --sidebar-bg: #f8f9fa;
+  --explorer-bg: #ffffff;
+  --tab-bg: #f3f3f3;
+  --active-tab-bg: #ffffff;
+  --border-color: #e1e4e8;
+  --text-primary: #111111;
+  --text-secondary: #24292e;
+  --text-muted: #6a737d;
+  --hover-bg: #f6f8fa;
+  --active-bg: #ebf0f4;
+  --accent: #1a1a1a;
+  --accent-hover: #000000;
+  --status-bar-bg: #f8f9fa;
+  --status-bar-text: #24292e;
+  
+  --editor-bg: #ffffff;
+  --editor-fg: #333333;
+  --editor-line-highlight: #f0f0f0;
+  --editor-selection: #add6ff;
+  
+  /* Terminal Tokens - Monochrome Light */
+  --term-bg: #ffffff;
+  --term-win-bg: #ffffff;
+  --term-fg: #1a1a1a;
+  --term-user: #000000;
+  --term-path: #4a4a4a;
+  --term-symbol: #000000;
+  --term-accent: #24292e;
+  --term-error: #d73a49;
+  --term-info: #586069;
+  --term-muted: #959da5;
+  
+  --sidebar-resize-handle: #007acc;
+}
+
+[data-theme="midnight"] {
+  --main-bg: #000000;
+  --sidebar-bg: #000000;
+  --explorer-bg: #000000;
+  --tab-bg: #080808;
+  --active-tab-bg: #000000;
+  --border-color: #111111;
+  --text-primary: #ffffff;
+  --text-secondary: #aaaaaa;
+  --text-muted: #444444;
+  --hover-bg: #0d0d0d;
+  --active-bg: #1a1a1a;
+  --accent: #ffffff;
+  --accent-hover: #ffffff;
+  --status-bar-bg: #000000;
+  --status-bar-text: #888888;
+  
+  --editor-bg: #000000;
+  --editor-fg: #ffffff;
+  --editor-line-highlight: #080808;
+  --editor-selection: #1a1a1a;
+  
+  /* Terminal Tokens - Pure OLED Black */
+  --term-bg: #000000;
+  --term-win-bg: #000000;
+  --term-fg: #ffffff;
+  --term-user: #00aaff;
+  --term-path: #00ff88;
+  --term-symbol: #ff0044;
+  --term-accent: #00ddee;
+  --term-error: #ff0044;
+  --term-info: #00ddee;
+  --term-muted: #555555;
 }
 
 /* ─── Reset ─── */
@@ -113,5 +195,5 @@ body {
   align-items: center;
   border-bottom: 1px solid var(--border-color);
   background: var(--tab-bg);
-  overflow: hidden;
+  overflow: visible; /* Fixed: changed from hidden to allow dropdowns to show */
 }
