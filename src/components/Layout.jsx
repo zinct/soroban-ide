@@ -16,9 +16,6 @@ import Terminal from "../features/terminal/Terminal";
 import { getLanguageFromName, getLanguageDisplayName } from "../features/editor/editorUtils";
 import { cloneNodeWithNewIds, addNodeToTree, moveNodeInTree } from "../features/workspace/workspaceUtils";
 import SettingsPanel from "../features/settings/SettingsPanel";
-import InteractPanel from "../features/interact/InteractPanel";
-import { useContract } from "../context/ContractContext";
-import { Wallet } from "lucide-react";
 import "../styles/settings.css";
 
 /**
@@ -37,7 +34,6 @@ const Layout = () => {
   const [lastSessionId, setLastSessionId] = useState(null);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
-  const { isInteractActive, walletAddress, connectWallet, contractId } = useContract();
   const initializationStartedRef = useRef(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
@@ -304,64 +300,48 @@ const Layout = () => {
               <div className="workspace-header">
                 <Tabs tabs={tabManager.tabs} activeFileId={tabManager.activeFileId} previewTabId={tabManager.previewTabId} files={workspace.flattenedNodes} onTabSelect={tabManager.setActiveFileId} onTabClose={tabManager.closeTab} />
 
-                <div className="header-actions">
-                  <button 
-                    className={`btn ${walletAddress ? "btn-secondary" : "btn-primary"}`} 
-                    onClick={connectWallet}
-                    style={{ height: "32px", fontSize: "12px", border: "1px solid var(--border-color)" }}
-                  >
-                    <Wallet size={14} />
-                    <span>
-                      {walletAddress 
-                        ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`
-                        : "Connect Wallet"
-                      }
-                    </span>
+                <div className="create-new-container" ref={createMenuRef}>
+                  <button className="create-new-btn" onClick={() => setShowCreateMenu(!showCreateMenu)} title="Create New...">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    <span className="create-new-label">Create Project</span>
                   </button>
-
-                  <div className="create-new-container" ref={createMenuRef}>
-                    <button className="create-new-btn" onClick={() => setShowCreateMenu(!showCreateMenu)} title="Create New...">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <line x1="12" y1="5" x2="12" y2="19" />
-                        <line x1="5" y1="12" x2="19" y2="12" />
-                      </svg>
-                      <span className="create-new-label">Create Project</span>
-                    </button>
-                    {showCreateMenu && (
-                      <div className="create-new-dropdown">
-                        <div
-                          className="create-new-item"
-                          onClick={() => {
-                            handleCreateProject("hello-world");
-                            setShowCreateMenu(false);
-                          }}>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                            <polyline points="14 2 14 8 20 8" />
-                          </svg>
-                          Create Hello World
-                        </div>
-                        <div
-                          className="create-new-item"
-                          onClick={() => {
-                            handleCreateProject("stellar-workshop");
-                            setShowCreateMenu(false);
-                          }}>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                            <polyline points="14 2 14 8 20 8" />
-                          </svg>
-                          Create Workshop Template
-                        </div>
-                        <div className="create-new-item" onClick={handleOpenGithubClone}>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
-                          </svg>
-                          Clone from GitHub
-                        </div>
+                  {showCreateMenu && (
+                    <div className="create-new-dropdown">
+                      <div
+                        className="create-new-item"
+                        onClick={() => {
+                          handleCreateProject("hello-world");
+                          setShowCreateMenu(false);
+                        }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                        </svg>
+                        Create Hello World
                       </div>
-                    )}
-                  </div>
+                      <div
+                        className="create-new-item"
+                        onClick={() => {
+                          handleCreateProject("stellar-workshop");
+                          setShowCreateMenu(false);
+                        }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                        </svg>
+                        Create Workshop Template
+                      </div>
+                      <div className="create-new-item" onClick={handleOpenGithubClone}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+                        </svg>
+                        Clone from GitHub
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -370,8 +350,6 @@ const Layout = () => {
               </div>
 
               <Terminal activeFileName={activeFile?.path} treeData={workspace.treeData} fileContents={workspace.fileContents} />
-
-              {isInteractActive && <InteractPanel />}
             </div>
           </>
         )}

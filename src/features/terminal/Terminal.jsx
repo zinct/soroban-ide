@@ -2,7 +2,6 @@ import React, { memo, useState, useCallback, useRef, useEffect, useMemo } from "
 import { loadState, saveStateSection } from "../../utils/storage";
 import { executeTerminalCommand, isBackendCommand } from "./terminalCommands";
 import { collectProjectFiles, submitCommand, connectBuildStream, killCommand } from "../../services/backendService";
-import { useContract } from "../../context/ContractContext";
 
 const MIN_HEIGHT = 56;
 const COLLAPSE_THRESHOLD = 60;
@@ -30,7 +29,6 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
   const [commandHistory, setCommandHistory] = useState(() => persistedState?.commandHistory || []);
   const [cwd, setCwd] = useState(() => persistedState?.cwd || currentDirectory);
   const [isRunning, setIsRunning] = useState(false);
-  const { setContractId } = useContract();
 
   const terminalRef = useRef(null);
   const inputRef = useRef(null);
@@ -104,6 +102,11 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
 
 
 
+            // Filter out decorative backend messages
+            const decorativePatterns = [/Executing:/i, /Command completed successfully/i, /Connected to build server/i, /Session:/i, /Sending to build server/i];
+            const isDecorative = decorativePatterns.some((pattern) => pattern.test(msg.content));
+            if (isDecorative) return;
+
             // Explicitly ignore file tree updates in the terminal (No-Sync Architecture)
             if (msg.type === "fileTreeUpdate") {
               if (onFileTreeUpdate) {
@@ -119,21 +122,6 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
 
             const className = msg.type === "error" ? "error" : msg.type === "info" ? "info" : "output";
             setHistory((prev) => [...prev, { type: className, content: msg.content }]);
-
-            // Scan for Contract ID after "✅ Deployed!"
-            if (msg.content && msg.content.includes("✅ Deployed!")) {
-              // The ID follows in the next line or same chunk
-              const idMatch = msg.content.match(/\bC[A-Z2-7]{55}\b/);
-              if (idMatch) {
-                setContractId(idMatch[0]);
-              }
-            } else if (msg.content && msg.content.match(/\bC[A-Z2-7]{55}\b/)) {
-              // Catch cases where the ID is sent in a separate chunk immediately after
-              const idMatch = msg.content.match(/\bC[A-Z2-7]{55}\b/);
-              if (idMatch) {
-                setContractId(idMatch[0]);
-              }
-            }
           },
           onError: (errorMsg) => {
             setHistory((prev) => [...prev, { type: "error", content: `❌ ${errorMsg}` }]);

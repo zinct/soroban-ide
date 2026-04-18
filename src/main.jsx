@@ -11,6 +11,5 @@ import './styles/tabs.css';
 import './styles/terminal.css';
 import './styles/components.css';
 import './styles/github.css';
-import './styles/interact.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
