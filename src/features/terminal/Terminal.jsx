@@ -3,7 +3,7 @@ import { loadState, saveStateSection } from "../../utils/storage";
 import { executeTerminalCommand, isBackendCommand } from "./terminalCommands";
 import { collectProjectFiles, submitCommand, connectBuildStream, killCommand } from "../../services/backendService";
 
-const MIN_HEIGHT = 28;
+const MIN_HEIGHT = 56;
 const COLLAPSE_THRESHOLD = 60;
 const DEFAULT_HEIGHT = 350;
 const MAX_HEIGHT = 600;
@@ -372,59 +372,57 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
         </button>
       </div>
 
-      {!isCollapsed && (
-        <div className="terminal-window" ref={terminalWindowRef} onScroll={handleScroll}>
-          <div className="terminal-content">
-            {history.map((entry, index) => (
-              <div key={index} className={getLineClassName(entry)}>
-                {entry.type === "command" && (
-                  <span className="terminal-prompt-line">
-                    <span className="terminal-prompt-user">soroban</span>
-                    <span className="terminal-prompt-at">@</span>
-                    <span className="terminal-prompt-host">studio</span>
-                    <span className="terminal-prompt-separator">:</span>
-                    <span className="terminal-prompt-path">{entry.cwd || getShortPath(cwd)}</span>
-                    <span className="terminal-prompt-symbol">$</span>
-                    <span className="terminal-prompt-command">{entry.content}</span>
-                  </span>
-                )}
-                {entry.type !== "command" && <pre className="terminal-output">{renderContentWithLinks(entry.content)}</pre>}
-              </div>
-            ))}
-            <div className={`terminal-input-line ${isRunning ? "compiling" : ""}`}>
-              {!isRunning ? (
+      <div className={`terminal-window ${isCollapsed ? "collapsed-window" : ""}`} ref={terminalWindowRef} onScroll={handleScroll}>
+        <div className="terminal-content">
+          {history.map((entry, index) => (
+            <div key={index} className={getLineClassName(entry)}>
+              {entry.type === "command" && (
                 <span className="terminal-prompt-line">
                   <span className="terminal-prompt-user">soroban</span>
                   <span className="terminal-prompt-at">@</span>
                   <span className="terminal-prompt-host">studio</span>
                   <span className="terminal-prompt-separator">:</span>
-                  <span className="terminal-prompt-path">{getShortPath(cwd)}</span>
+                  <span className="terminal-prompt-path">{entry.cwd || getShortPath(cwd)}</span>
                   <span className="terminal-prompt-symbol">$</span>
+                  <span className="terminal-prompt-command">{entry.content}</span>
                 </span>
-              ) : (
-                <div className="terminal-compiling-line">
-                  <span>Compiling</span>
-                  <span className="terminal-dots"></span>
-                </div>
               )}
-              <input 
-                ref={inputRef} 
-                type="text" 
-                className="terminal-input" 
-                value={isRunning ? "" : input} 
-                onChange={(e) => setInput(e.target.value)} 
-                onKeyDown={handleKeyDown} 
-                spellCheck="false" 
-                autoComplete="off" 
-                autoFocus 
-                readOnly={isRunning} 
-                placeholder={isRunning ? "Press Ctrl+C to cancel..." : ""} 
-              />
+              {entry.type !== "command" && <pre className="terminal-output">{renderContentWithLinks(entry.content)}</pre>}
             </div>
-            <div ref={windowEndRef} />
+          ))}
+          <div className={`terminal-input-line ${isRunning ? "compiling" : ""}`}>
+            {!isRunning ? (
+              <span className="terminal-prompt-line">
+                <span className="terminal-prompt-user">soroban</span>
+                <span className="terminal-prompt-at">@</span>
+                <span className="terminal-prompt-host">studio</span>
+                <span className="terminal-prompt-separator">:</span>
+                <span className="terminal-prompt-path">{getShortPath(cwd)}</span>
+                <span className="terminal-prompt-symbol">$</span>
+              </span>
+            ) : (
+              <div className="terminal-compiling-line">
+                <span>Compiling</span>
+                <span className="terminal-dots"></span>
+              </div>
+            )}
+            <input 
+              ref={inputRef} 
+              type="text" 
+              className="terminal-input" 
+              value={isRunning ? "" : input} 
+              onChange={(e) => setInput(e.target.value)} 
+              onKeyDown={handleKeyDown} 
+              spellCheck="false" 
+              autoComplete="off" 
+              autoFocus 
+              readOnly={isRunning} 
+              placeholder={isRunning ? "Press Ctrl+C to cancel..." : ""} 
+            />
           </div>
+          <div ref={windowEndRef} />
         </div>
-      )}
+      </div>
     </div>
   );
 });

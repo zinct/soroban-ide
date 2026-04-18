@@ -2,8 +2,7 @@
 
 .terminal {
   height: 120px;
-  border-top: 1px solid var(--border-color);
-  background: var(--term-bg);
+  background: transparent;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -16,36 +15,19 @@
 }
 
 .terminal.collapsed {
-  height: 0 !important;
-  min-height: 0 !important;
+  height: 56px; /* MIN_HEIGHT sync with JS and header height */
   flex: 0 0 auto;
   background: transparent;
   border-top: none;
   pointer-events: none;
-  overflow: visible;
 }
 
 .terminal.collapsed .terminal-header {
-  min-height: 0;
-  height: auto;
-  padding: 0;
   border-bottom: none;
-  background: transparent;
-  justify-content: flex-start;
-  position: absolute;
-  bottom: 0;
-  pointer-events: auto;
 }
 
 .terminal.collapsed .terminal-title-btn {
-  padding: 8px 16px;
-  margin: 0;
-  background: var(--term-bg);
-  border-radius: 4px 4px 0 0;
-  border: 1px solid var(--border-color);
-  border-bottom: none;
-  position: relative;
-  pointer-events: auto;
+  background: transparent;
 }
 
 .terminal.collapsed .terminal-resize-handle {
@@ -81,9 +63,11 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 8px 12px;
-  min-height: 40px;
+  padding: 0 16px;
+  height: var(--header-height);
   border-bottom: 1px solid var(--border-color);
+  pointer-events: auto;
+  background: transparent;
 }
 
 .terminal-title-btn {
@@ -91,13 +75,18 @@
   align-items: center;
   gap: 12px;
   background: transparent;
-  border: none;
+  border: 1px solid var(--border-color);
+  border-top: 1px solid var(--text-muted); /* Colored/Highlight line on top */
+  border-bottom: none; /* Let baseline handle it */
   color: inherit;
   cursor: pointer;
-  padding: 10px 16px;
-  margin: -8px -8px;
-  border-radius: 4px;
+  padding: 0 20px;
+  height: calc(100% + 1px);
+  margin-bottom: -1px;
+  border-radius: 6px 6px 0 0;
   transition: background 0.15s;
+  z-index: 2;
+  position: relative;
 }
 
 .terminal-title-btn:hover {
@@ -105,9 +94,9 @@
 }
 
 .terminal-title {
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
   letter-spacing: 0.05em;
 }
 
