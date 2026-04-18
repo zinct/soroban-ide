@@ -7,14 +7,6 @@
   overflow: hidden;
 }
 
-.github-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--sidebar-bg);
-}
 
 .github-panel-body {
   flex: 1;
@@ -283,6 +275,7 @@
   transition: background 0.15s, border-color 0.15s;
   text-align: left;
   width: 100%;
+  min-width: 200px;
 }
 
 .github-action-card:hover {
@@ -402,7 +395,7 @@
   border: none;
   border-radius: 6px;
   background: var(--accent);
-  color: var(--text-primary);
+  color: var(--accent-contrast);
   border: 1px solid var(--border-color);
   font-size: var(--font-size-sm);
   font-weight: 500;
@@ -416,8 +409,9 @@
 }
 
 .github-push-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
+  color: var(--text-muted);
 }
 
 /* ─── Repo List ─── */

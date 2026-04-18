@@ -35,7 +35,6 @@ const GitHubPanel = memo(({ treeData, fileContents }) => {
 
   // Create repo state
   const [newRepoName, setNewRepoName] = useState("");
-  const [newRepoPrivate, setNewRepoPrivate] = useState(false);
   const [newRepoDesc, setNewRepoDesc] = useState("");
 
   // Push state
@@ -155,7 +154,7 @@ const GitHubPanel = memo(({ treeData, fileContents }) => {
     setPushProgress({ step: 0, total: 6, detail: "Creating repository..." });
 
     try {
-      const repo = await createRepository(token, newRepoName.trim(), newRepoPrivate, newRepoDesc.trim());
+      const repo = await createRepository(token, newRepoName.trim(), false, newRepoDesc.trim());
       setPushProgress({ step: 1, total: 6, detail: "Repository created! Pushing files..." });
 
       const files = collectProjectFiles(treeData, fileContents, { includeAll: true });
@@ -178,7 +177,7 @@ const GitHubPanel = memo(({ treeData, fileContents }) => {
       setIsPushing(false);
       setPushProgress(null);
     }
-  }, [token, newRepoName, newRepoPrivate, newRepoDesc, treeData, fileContents]);
+  }, [token, newRepoName, newRepoDesc, treeData, fileContents]);
 
   const handlePushToExisting = useCallback(
     async (repo) => {
@@ -230,7 +229,7 @@ const GitHubPanel = memo(({ treeData, fileContents }) => {
   if (!token || !user) {
     return (
       <div className="github-panel">
-        <div className="github-panel-header">
+        <div className="sidebar-header">
           <div className="sidebar-title">GitHub</div>
         </div>
         <div className="github-panel-body">
@@ -291,15 +290,17 @@ const GitHubPanel = memo(({ treeData, fileContents }) => {
 
   return (
     <div className="github-panel">
-      <div className="github-panel-header">
+      <div className="sidebar-header">
         <div className="sidebar-title">GitHub</div>
-        <button className="github-logout-btn" onClick={handleLogout} title="Disconnect">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
-        </button>
+        <div className="sidebar-actions">
+          <button className="github-logout-btn" onClick={handleLogout} title="Disconnect">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div className="github-panel-body">
@@ -429,16 +430,6 @@ const GitHubPanel = memo(({ treeData, fileContents }) => {
               />
             </div>
 
-            <div className="github-form-group">
-              <label className="github-toggle-label">
-                <input
-                  type="checkbox"
-                  checked={newRepoPrivate}
-                  onChange={(e) => setNewRepoPrivate(e.target.checked)}
-                />
-                <span>Private repository</span>
-              </label>
-            </div>
 
             <button
               className="github-push-btn"
