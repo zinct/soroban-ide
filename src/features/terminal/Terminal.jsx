@@ -100,8 +100,6 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
           onMessage: (msg) => {
             console.log("[Terminal] WebSocket message received:", msg);
 
-
-
             // Filter out decorative backend messages
             const decorativePatterns = [/Executing:/i, /Command completed successfully/i, /Connected to build server/i, /Session:/i, /Sending to build server/i];
             const isDecorative = decorativePatterns.some((pattern) => pattern.test(msg.content));
@@ -293,7 +291,7 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
         if (isRunning) {
           // SIGINT: kill the running backend process
           e.preventDefault();
-          
+
           if (activeJobIdRef.current && lastSessionIdRef.current) {
             killCommand(lastSessionIdRef.current, activeJobIdRef.current);
           }
@@ -338,13 +336,7 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
     return parts.map((part, i) => {
       if (part.match(urlRegex)) {
         return (
-          <a
-            key={i}
-            href={part}
-            className="terminal-link"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+          <a key={i} href={part} className="terminal-link" target="_blank" rel="noopener noreferrer">
             {part}
           </a>
         );
@@ -390,8 +382,8 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
               {entry.type !== "command" && <pre className="terminal-output">{renderContentWithLinks(entry.content)}</pre>}
             </div>
           ))}
-          <div className={`terminal-input-line ${isRunning ? "compiling" : ""}`}>
-            {!isRunning ? (
+          {!isRunning ? (
+            <div className="terminal-input-line">
               <span className="terminal-prompt-line">
                 <span className="terminal-prompt-user">soroban</span>
                 <span className="terminal-prompt-at">@</span>
@@ -400,26 +392,35 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
                 <span className="terminal-prompt-path">{getShortPath(cwd)}</span>
                 <span className="terminal-prompt-symbol">$</span>
               </span>
-            ) : (
+              <input
+                ref={inputRef}
+                type="text"
+                className="terminal-input"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                spellCheck="false"
+                autoComplete="off"
+                autoFocus
+              />
+            </div>
+          ) : (
+            <div className="terminal-compiling-container">
               <div className="terminal-compiling-line">
                 <span>Compiling</span>
                 <span className="terminal-dots"></span>
               </div>
-            )}
-            <input 
-              ref={inputRef} 
-              type="text" 
-              className="terminal-input" 
-              value={isRunning ? "" : input} 
-              onChange={(e) => setInput(e.target.value)} 
-              onKeyDown={handleKeyDown} 
-              spellCheck="false" 
-              autoComplete="off" 
-              autoFocus 
-              readOnly={isRunning} 
-              placeholder={isRunning ? "Press Ctrl+C to cancel..." : ""} 
-            />
-          </div>
+              <div className="terminal-cancel-hint">Press Ctrl+C to cancel...</div>
+              <input
+                ref={inputRef}
+                type="text"
+                className="terminal-hidden-input"
+                readOnly
+                onKeyDown={handleKeyDown}
+                autoFocus
+              />
+            </div>
+          )}
           <div ref={windowEndRef} />
         </div>
       </div>
