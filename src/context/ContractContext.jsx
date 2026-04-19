@@ -24,6 +24,7 @@ export const ContractProvider = ({ children }) => {
     checkConnection();
   }, []);
 
+
   const connectWallet = useCallback(async () => {
     try {
       setError(null);
