@@ -22,6 +22,7 @@
   --warning: #a1a1aa;
   --info: #71717a;
   --success: #e4e4e7;
+  --main-bg-rgb: 21, 21, 23;
 
   /* Editor Colors - Slightly lighter than explorer */
   --editor-bg: #151517;
@@ -104,8 +105,8 @@
   --text-primary: #111111;
   --text-secondary: #24292e;
   --text-muted: #6a737d;
-  --hover-bg: #f6f8fa;
-  --active-bg: #ebf0f4;
+  --hover-bg: #f0f2f5;
+  --active-bg: #e2e8f0;
   --accent: #27272a;
   --accent-hover: #3f3f46;
   --accent-contrast: #ffffff;
@@ -130,6 +131,7 @@
   --term-muted: #959da5;
   
   --sidebar-resize-handle: #e1e4e8;
+  --main-bg-rgb: 255, 255, 255;
 }
 
 
@@ -214,5 +216,6 @@ body {
   flex-direction: column;
   background: var(--editor-bg);
   padding-top: 12px;
+  padding-bottom: 56px; /* Space for floating terminal header */
   overflow: hidden;
 }

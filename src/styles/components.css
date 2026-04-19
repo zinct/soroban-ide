@@ -62,7 +62,7 @@
 
 .context-menu {
   position: fixed;
-  background: #1a1a1a;
+  background: var(--sidebar-bg);
   border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 4px 0;
@@ -84,7 +84,7 @@
 }
 
 .context-menu-item:hover {
-  background: #252525;
+  background: var(--hover-bg);
 }
 
 .context-menu-item.delete {
@@ -264,7 +264,7 @@
 }
 
 .create-new-item:hover {
-  background: var(--hover-bg);
+  background: var(--active-bg);
 }
 
 .create-new-item svg {
