@@ -9,7 +9,8 @@ import GitHubPanel from "../github/GitHubPanel";
 const MIN_WIDTH = 260;
 const MAX_WIDTH = 1200;
 const COLLAPSE_THRESHOLD = 120;
-import { Settings } from "lucide-react";
+import { Settings, BookOpen } from "lucide-react";
+import TutorialPanel from "../tutorial/TutorialPanel";
 
 const ActionButton = memo(({ icon, onClick, title }) => (
   <button className="sidebar-action" type="button" onClick={onClick} data-tooltip={title}>
@@ -41,7 +42,7 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
   }, [width, isCollapsed]);
   const [isDragging, setIsDragging] = useState(false);
   const [inlineInput, setInlineInput] = useState(null);
-  const [activePanel, setActivePanel] = useState(() => persistedSidebarState?.activePanel || "explorer"); // "explorer" | "github"
+  const [activePanel, setActivePanel] = useState(() => persistedSidebarState?.activePanel || "explorer"); // "explorer" | "github" | "tutorial"
   const [contextMenu, setContextMenu] = useState(null);
   const [renameNode, setRenameNode] = useState(null);
   const [dragState, setDragState] = useState({ draggingId: null, dragOverId: null });
@@ -593,18 +594,21 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
             </svg>
           </button>
 
-          <button className="activity-btn" onClick={() => window.open("https://developers.stellar.org/docs/build/smart-contracts/overview", "_blank")} title="Soroban Documentation">
-            <img
-              src="/assets/images/soroban.png"
-              alt="Docs"
-              className="soroban-docs-icon"
-              style={{
-                width: "30px",
-                height: "30px",
-                transition: "opacity 0.2s ease",
-                transform: "translateY(1px)",
-              }}
-            />
+          <button
+            className={`activity-btn ${activePanel === "tutorial" && !isCollapsed ? "active" : ""}`}
+            onClick={() => {
+              if (isCollapsed || activePanel !== "tutorial") {
+                setIsCollapsed(false);
+                // Expand width for tutorials to provide better reading experience
+                const targetWidth = Math.max(420, width);
+                setWidth(targetWidth);
+                setActivePanel("tutorial");
+              } else {
+                toggleCollapse();
+              }
+            }}
+            title="Tutorials">
+            <BookOpen size={24} />
           </button>
 
           <div style={{ marginTop: "auto", width: "100%" }}>
@@ -616,7 +620,9 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
 
         {/* Collapsible Panel Section (Right of Activity Bar) */}
         <div className={`sidebar-panel ${isCollapsed ? "hidden" : ""}`}>
-          {activePanel === "github" ? (
+          {activePanel === "tutorial" ? (
+            <TutorialPanel />
+          ) : activePanel === "github" ? (
             <GitHubPanel treeData={treeData || tree} fileContents={fileContents || {}} onConfirm={onConfirm} />
           ) : root ? (
             <>

@@ -1,16 +1,13 @@
 /* ─── Terminal Panel ─── */
 
 .terminal {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  height: 120px;
   background: transparent;
   display: flex;
   flex-direction: column;
-  z-index: 100;
+  flex-shrink: 0;
+  position: relative;
   overflow: hidden;
-  border-top: 1px solid var(--text-muted); /* Visible grey highlight */
 }
 
 .terminal.animate {
@@ -19,9 +16,10 @@
 
 .terminal.collapsed {
   height: 56px; /* MIN_HEIGHT sync with JS and header height */
+  flex: 0 0 auto;
   background: transparent;
-  border-top: 1px solid var(--text-muted);
-  pointer-events: auto; /* Ensure header remains interactive */
+  border-top: none;
+  pointer-events: none;
 }
 
 .terminal.collapsed .terminal-header {
@@ -69,9 +67,7 @@
   height: var(--header-height);
   border-bottom: 1px solid var(--border-color);
   pointer-events: auto;
-  background: rgba(var(--main-bg-rgb, 21, 21, 23), 0.4);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: transparent;
 }
 
 .terminal-title-btn {
@@ -79,16 +75,22 @@
   align-items: center;
   gap: 12px;
   background: transparent;
-  border: none;
+  border: 1px solid var(--border-color);
+  border-top: 1px solid var(--text-muted); /* Colored/Highlight line on top */
+  border-bottom: none; /* Let baseline handle it */
   color: inherit;
   cursor: pointer;
-  padding: 0 4px;
-  height: 100%;
-  transition: opacity 0.15s;
+  padding: 0 20px;
+  height: calc(100% + 1px);
+  margin-bottom: -1px;
+  border-radius: 6px 6px 0 0;
+  transition: background 0.15s;
+  z-index: 2;
+  position: relative;
 }
 
 .terminal-title-btn:hover {
-  opacity: 0.8;
+  background: var(--hover-bg);
 }
 
 .terminal-title {
@@ -257,34 +259,13 @@
 
 /* ─── Compiling Animation ─── */
 
-.terminal-compiling-container {
-  display: flex;
-  flex-direction: column;
-  margin: 4px 0;
-  padding-bottom: 8px;
-}
-
 .terminal-compiling-line {
   color: var(--term-fg);
   font-family: inherit;
   font-size: inherit;
+  margin: 4px 0;
   display: flex;
   align-items: center;
-}
-
-.terminal-cancel-hint {
-  color: var(--term-muted);
-  font-size: 14px;
-  margin-top: 4px;
-  animation: terminal-pulse 1.5s ease-in-out infinite;
-}
-
-.terminal-hidden-input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-  width: 0;
-  height: 0;
 }
 
 .terminal-dots::after {
