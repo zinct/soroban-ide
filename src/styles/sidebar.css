@@ -16,7 +16,7 @@
   flex-direction: row; /* Changed to horizontal */
   border-right: 1px solid var(--border-color);
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); /* Smoother, more premium transition */
-  overflow: visible;
+  overflow: hidden;
   z-index: 50;
 }
 
@@ -79,8 +79,8 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  overflow: visible;
+  min-width: 300px; /* Prevent content wrapping during width animation */
+  overflow: hidden;
   transition: opacity 0.2s ease;
 }
 
@@ -177,7 +177,8 @@
   padding: 0 12px;
   border-bottom: 1px solid var(--border-color);
   background: var(--sidebar-bg);
-  overflow: visible;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .sidebar-title {
