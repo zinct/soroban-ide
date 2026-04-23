@@ -9,7 +9,7 @@ import GitHubPanel from "../github/GitHubPanel";
 const MIN_WIDTH = 260;
 const MAX_WIDTH = 1200;
 const COLLAPSE_THRESHOLD = 120;
-import { Settings, BookOpen, Rocket, ShieldCheck } from "lucide-react";
+import { Settings, BookOpen, Rocket, CheckCircle2 } from "lucide-react";
 import TutorialPanel from "../tutorial/TutorialPanel";
 import DeployPanel from "../deploy/DeployPanel";
 import ValidationPanel from "../validation/ValidationPanel";
@@ -672,7 +672,7 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
               }
             }}
             title="Deploy">
-            <Rocket size={22} />
+            <Rocket size={24} />
           </button>
 
           <button
@@ -687,12 +687,12 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
               }
             }}
             title="Validate Project">
-            <ShieldCheck size={22} />
+            <CheckCircle2 size={24} />
           </button>
 
           <div style={{ marginTop: "auto", width: "100%" }}>
             <button className={`activity-btn ${isSettingsOpen ? "active" : ""}`} onClick={onToggleSettings} title="Settings">
-              <Settings size={22} />
+              <Settings size={24} />
             </button>
           </div>
         </div>

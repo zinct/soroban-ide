@@ -310,8 +310,7 @@ const Layout = () => {
   const modKey = isMac ? "⌘" : "Ctrl";
 
   const paletteCommands = useMemo(() => {
-    const dispatch = (name, detail) =>
-      window.dispatchEvent(new CustomEvent(name, detail ? { detail } : undefined));
+    const dispatch = (name, detail) => window.dispatchEvent(new CustomEvent(name, detail ? { detail } : undefined));
 
     return [
       {
@@ -442,16 +441,7 @@ const Layout = () => {
         run: () => setTheme("light"),
       },
     ];
-  }, [
-    openPalette,
-    handleCreateProject,
-    handleOpenGithubClone,
-    isSettingsOpen,
-    workspace.collapseAll,
-    tabManager,
-    handleCloseAllTabs,
-    modKey,
-  ]);
+  }, [openPalette, handleCreateProject, handleOpenGithubClone, isSettingsOpen, workspace.collapseAll, tabManager, handleCloseAllTabs, modKey]);
 
   const handlePaletteOpenFile = useCallback(
     (fileId) => {
@@ -478,7 +468,6 @@ const Layout = () => {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [openPalette]);
-
 
   return (
     <div className="app-shell">
@@ -532,12 +521,8 @@ const Layout = () => {
                 <Tabs tabs={tabManager.tabs} activeFileId={tabManager.activeFileId} previewTabId={tabManager.previewTabId} files={workspace.flattenedNodes} onTabSelect={tabManager.setActiveFileId} onTabClose={tabManager.closeTab} />
 
                 <div className="create-new-container" ref={createMenuRef}>
-                  <button className="create-new-btn" onClick={() => setShowCreateMenu(!showCreateMenu)} title="Create New...">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <line x1="12" y1="5" x2="12" y2="19" />
-                      <line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                    <span className="create-new-label">Create Project</span>
+                  <button className="premium-create-btn" onClick={() => setShowCreateMenu(!showCreateMenu)} title="Create New...">
+                    <span className="btn-label">Create Project</span>
                   </button>
                   {showCreateMenu && (
                     <div className="create-new-dropdown">
@@ -639,14 +624,7 @@ const Layout = () => {
         </div>
       </div>
 
-      <CommandPalette
-        isOpen={palette.isOpen}
-        mode={palette.mode}
-        commands={paletteCommands}
-        files={paletteFiles}
-        onClose={closePalette}
-        onOpenFile={handlePaletteOpenFile}
-      />
+      <CommandPalette isOpen={palette.isOpen} mode={palette.mode} commands={paletteCommands} files={paletteFiles} onClose={closePalette} onOpenFile={handlePaletteOpenFile} />
 
       <div className={`github-clone-overlay ${confirmModal.isOpen ? "visible" : ""}`}>
         <div className="github-clone-dialog">
