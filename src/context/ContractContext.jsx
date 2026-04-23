@@ -1,24 +1,30 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
-import { isFreighterConnected, getFreighterAddress } from "../services/freighter";
+import { isFreighterConnected, getFreighterAddress, connectFreighter } from "../services/freighter";
+import { registerFreighterWallet } from "../services/backendService";
 
 const ContractContext = createContext(null);
 
 export const ContractProvider = ({ children }) => {
   const [contractId, setContractId] = useState(null);
   const [walletAddress, setWalletAddress] = useState(null);
+  const [walletNetwork, setWalletNetwork] = useState(null);
   const [isInteractActive, setIsInteractActive] = useState(false);
   const [error, setError] = useState(null);
 
-  // Check if Freighter is connected on mount
+  // Check if Freighter is already connected on mount — NO popup, silent only
   useEffect(() => {
     const checkConnection = async () => {
       try {
-        if (await isFreighterConnected()) {
+        const connected = await isFreighterConnected();
+        if (connected) {
           const { address } = await getFreighterAddress();
-          if (address) setWalletAddress(address);
+          if (address) {
+            setWalletAddress(address);
+            registerFreighterWallet(address).catch(() => {});
+          }
         }
       } catch (err) {
-        console.error("Freighter connection check failed:", err);
+        // Silently ignore — user hasn't connected yet
       }
     };
     checkConnection();
@@ -28,22 +34,16 @@ export const ContractProvider = ({ children }) => {
   const connectWallet = useCallback(async () => {
     try {
       setError(null);
-      const connected = await isFreighterConnected();
-      console.log("Attempting to connect... isConnected:", connected);
-      
-      if (!connected) {
-        // If isConnected is false, but we can't be 100% sure it's not installed, 
-        // we'll try to check if the global object exists at least.
-        const hasApi = (typeof window !== "undefined") && (window.freighterApi || window.stellarPirate);
-        if (!hasApi) {
-          throw new Error("Freighter wallet not found. Please install the extension.");
-        }
-        console.log("API found but isConnected was false. Proceeding to getAddress to trigger popup.");
-      }
-      const { address, error: freighterError } = await getFreighterAddress();
+      const { address, network, wrongNetwork, error: freighterError } = await connectFreighter();
       if (freighterError) throw new Error(freighterError);
       if (address) {
         setWalletAddress(address);
+        setWalletNetwork(network || null);
+        // Register public key in runner container so CLI can use it as --source
+        registerFreighterWallet(address).catch(() => {});
+        if (wrongNetwork) {
+          setError("⚠️ Freighter is on Mainnet. Please switch to Testnet in Freighter settings.");
+        }
         return address;
       }
     } catch (err) {
@@ -57,15 +57,11 @@ export const ContractProvider = ({ children }) => {
   }, []);
 
   const value = {
-    contractId,
-    setContractId,
-    walletAddress,
-    connectWallet,
-    disconnectWallet,
-    isInteractActive,
-    setIsInteractActive,
-    error,
-    setError,
+    contractId, setContractId,
+    walletAddress, walletNetwork,
+    connectWallet, disconnectWallet,
+    isInteractActive, setIsInteractActive,
+    error, setError,
   };
 
   return <ContractContext.Provider value={value}>{children}</ContractContext.Provider>;

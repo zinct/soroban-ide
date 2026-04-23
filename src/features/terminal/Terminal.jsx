@@ -371,16 +371,42 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [toggleCollapse]);
 
+  // External command bus — allows the Command Palette to toggle / clear the terminal.
+  // Also handles soroban:runCommand from Deploy panel.
   useEffect(() => {
     const handleToggle = () => toggleCollapse();
     const handleClear = () => updateTerminal(activeTerminalId, { history: [] });
+    const handleRunCommand = (e) => {
+      const { cmd } = e.detail || {};
+      if (!cmd) return;
+      // Expand terminal if collapsed
+      if (isCollapsed) {
+        setIsCollapsed(false);
+        setHeight(previousHeight.current || DEFAULT_HEIGHT);
+      }
+      handleExecute(cmd);
+    };
+    const handleAppend = (e) => {
+      const { type, content, cwd: entryCwd } = e.detail || {};
+      if (!content) return;
+      if (isCollapsed) {
+        setIsCollapsed(false);
+        setHeight(previousHeight.current || DEFAULT_HEIGHT);
+      }
+      const className = type === "error" ? "error" : type === "command" ? "command" : "output";
+      setTerminals(prev => prev.map(t => t.id === activeTerminalId ? { ...t, history: [...t.history, { type: className, content, cwd: entryCwd || "~/project" }] } : t));
+    };
     window.addEventListener("soroban:toggleTerminal", handleToggle);
     window.addEventListener("soroban:clearTerminal", handleClear);
+    window.addEventListener("soroban:runCommand", handleRunCommand);
+    window.addEventListener("soroban:terminalAppend", handleAppend);
     return () => {
       window.removeEventListener("soroban:toggleTerminal", handleToggle);
       window.removeEventListener("soroban:clearTerminal", handleClear);
+      window.removeEventListener("soroban:runCommand", handleRunCommand);
+      window.removeEventListener("soroban:terminalAppend", handleAppend);
     };
-  }, [toggleCollapse, activeTerminalId, updateTerminal]);
+  }, [toggleCollapse, isCollapsed, handleExecute, activeTerminalId, updateTerminal]);
 
   const handleTerminalClick = useCallback(() => {
     if (window.getSelection()?.toString()) return;

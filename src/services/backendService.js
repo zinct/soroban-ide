@@ -173,6 +173,59 @@ export const killCommand = async (sessionId, jobId) => {
 // Keep old name as alias for backward compatibility
 export const submitBuild = (files) => submitCommand(files, "stellar contract build");
 
+// ─── Wallet ───────────────────────────────────────────────────────────────────
+
+/** POST /api/wallet/default/init — create + fund default testnet account */
+export const initDefaultWallet = async () => {
+  const res = await fetch(`${API_BASE}/wallet/default/init`, { method: "POST" });
+  if (!res.ok) throw new Error((await res.json()).error || "Wallet init failed");
+  return res.json();
+};
+
+/** GET /api/wallet/default/status */
+export const getDefaultWalletStatus = async () => {
+  const res = await fetch(`${API_BASE}/wallet/default/status`);
+  if (!res.ok) throw new Error("Failed to fetch wallet status");
+  return res.json();
+};
+
+/** POST /api/wallet/freighter/register — register Freighter public key as named identity */
+export const registerFreighterWallet = async (address) => {
+  const res = await fetch(`${API_BASE}/wallet/freighter/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ address }),
+  });
+  if (!res.ok) throw new Error((await res.json()).error || "Failed to register Freighter wallet");
+  return res.json();
+};
+
+// ─── Contract Interface ───────────────────────────────────────────────────────
+
+/** POST /api/contract/interface — parse pub fn signatures from files */
+export const getContractInterface = async (files) => {
+  const res = await fetch(`${API_BASE}/contract/interface`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ files }),
+  });
+  if (!res.ok) throw new Error("Failed to parse contract interface");
+  return res.json(); // { functions: ContractFn[] }
+};
+
+// ─── Validation ───────────────────────────────────────────────────────────────
+
+/** POST /api/validate/project */
+export const validateProject = async (files, category = "ec-level", repoName = "") => {
+  const res = await fetch(`${API_BASE}/validate/project`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ files, category, repo_name: repoName }),
+  });
+  if (!res.ok) throw new Error("Validation request failed");
+  return res.json(); // ValidateResponse
+};
+
 /**
  * Open a WebSocket connection to stream command output.
  *

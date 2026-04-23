@@ -12,5 +12,6 @@ import './styles/terminal.css';
 import './styles/components.css';
 import './styles/github.css';
 import './styles/palette.css';
+import './styles/deploy.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);

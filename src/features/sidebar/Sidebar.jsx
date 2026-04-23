@@ -9,8 +9,10 @@ import GitHubPanel from "../github/GitHubPanel";
 const MIN_WIDTH = 260;
 const MAX_WIDTH = 1200;
 const COLLAPSE_THRESHOLD = 120;
-import { Settings, BookOpen } from "lucide-react";
+import { Settings, BookOpen, Rocket, ShieldCheck } from "lucide-react";
 import TutorialPanel from "../tutorial/TutorialPanel";
+import DeployPanel from "../deploy/DeployPanel";
+import ValidationPanel from "../validation/ValidationPanel";
 
 const ActionButton = memo(({ icon, onClick, title }) => (
   <button className="sidebar-action" type="button" onClick={onClick} data-tooltip={title}>
@@ -658,6 +660,36 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
             <BookOpen size={24} />
           </button>
 
+          <button
+            className={`activity-btn ${activePanel === "deploy" && !isCollapsed ? "active" : ""}`}
+            onClick={() => {
+              if (isCollapsed || activePanel !== "deploy") {
+                setIsCollapsed(false);
+                setWidth(Math.max(340, lastWidth.current));
+                setActivePanel("deploy");
+              } else {
+                toggleCollapse();
+              }
+            }}
+            title="Deploy">
+            <Rocket size={22} />
+          </button>
+
+          <button
+            className={`activity-btn ${activePanel === "validation" && !isCollapsed ? "active" : ""}`}
+            onClick={() => {
+              if (isCollapsed || activePanel !== "validation") {
+                setIsCollapsed(false);
+                setWidth(Math.max(340, lastWidth.current));
+                setActivePanel("validation");
+              } else {
+                toggleCollapse();
+              }
+            }}
+            title="Validate Project">
+            <ShieldCheck size={22} />
+          </button>
+
           <div style={{ marginTop: "auto", width: "100%" }}>
             <button className={`activity-btn ${isSettingsOpen ? "active" : ""}`} onClick={onToggleSettings} title="Settings">
               <Settings size={22} />
@@ -671,6 +703,24 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
             <TutorialPanel />
           ) : activePanel === "github" ? (
             <GitHubPanel treeData={treeData || tree} fileContents={fileContents || {}} onConfirm={onConfirm} />
+          ) : activePanel === "deploy" ? (
+            <>
+              <div className="sidebar-header">
+                <div className="sidebar-title">Deploy</div>
+              </div>
+              <div className="sidebar-body" style={{ overflowY: "auto" }}>
+                <DeployPanel treeData={treeData || tree} fileContents={fileContents || {}} />
+              </div>
+            </>
+          ) : activePanel === "validation" ? (
+            <>
+              <div className="sidebar-header">
+                <div className="sidebar-title">Validate Project</div>
+              </div>
+              <div className="sidebar-body" style={{ overflowY: "auto" }}>
+                <ValidationPanel treeData={treeData || tree} fileContents={fileContents || {}} />
+              </div>
+            </>
           ) : root ? (
             <>
               <div className="sidebar-header">
