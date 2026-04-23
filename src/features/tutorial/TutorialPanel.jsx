@@ -21,8 +21,8 @@ const CopyButton = ({ text }) => {
 
 const LANGUAGES = [
   { id: "en", label: "English", flag: "🇺🇸" },
-  { id: "fil", label: "Filipino", flag: "🇵🇭" },
-  { id: "vi", label: "Tiếng Việt", flag: "🇻🇳" },
+  { id: "ph", label: "Filipino", flag: "🇵🇭" },
+  { id: "vn", label: "Tiếng Việt", flag: "🇻🇳" },
   { id: "id", label: "Bahasa Indonesia", flag: "🇮🇩" },
 ];
 
