@@ -25,7 +25,7 @@ export const fetchTemplate = async (name) => {
  * This ensures all commands share the same workspace on the backend,
  * even when frontend and backend are on different domains (cross-origin).
  */
-const getSessionId = () => {
+export const getSessionId = () => {
   let sid = localStorage.getItem("workspace_session_id");
   if (!sid) {
     sid = crypto.randomUUID();
