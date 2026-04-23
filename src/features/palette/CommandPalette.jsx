@@ -22,6 +22,16 @@ const CommandPalette = memo(({ isOpen, mode: initialMode, commands, files, onClo
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef(null);
   const listRef = useRef(null);
+  const [shouldRender, setShouldRender] = useState(isOpen);
+
+  useEffect(() => {
+    if (isOpen) {
+      setShouldRender(true);
+    } else {
+      const timer = setTimeout(() => setShouldRender(false), 200);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -140,7 +150,7 @@ const CommandPalette = memo(({ isOpen, mode: initialMode, commands, files, onClo
     [results, selectedIndex, runResult, onClose],
   );
 
-  if (!isOpen) return null;
+  if (!shouldRender) return null;
 
   const placeholder =
     effectiveMode === "command"
@@ -148,9 +158,9 @@ const CommandPalette = memo(({ isOpen, mode: initialMode, commands, files, onClo
       : "Search files by name or path… (prefix with > to run a command)";
 
   return (
-    <div className="command-palette-backdrop" onMouseDown={onClose}>
+    <div className={`command-palette-backdrop ${isOpen ? "visible" : ""}`} onMouseDown={onClose}>
       <div
-        className="command-palette"
+        className={`command-palette ${isOpen ? "visible" : ""}`}
         role="dialog"
         aria-label={effectiveMode === "command" ? "Command Palette" : "Quick Open"}
         onMouseDown={(e) => e.stopPropagation()}
