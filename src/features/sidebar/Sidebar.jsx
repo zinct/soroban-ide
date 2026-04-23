@@ -9,6 +9,13 @@ import GitHubPanel from "../github/GitHubPanel";
 const MIN_WIDTH = 260;
 const MAX_WIDTH = 1200;
 const COLLAPSE_THRESHOLD = 120;
+const PANEL_WIDTHS = {
+  explorer: 340,
+  github: 380,
+  tutorial: 560,
+  deploy: 500,
+  validation: 500,
+};
 import { Settings, BookOpen, Rocket, CheckCircle2 } from "lucide-react";
 import TutorialPanel from "../tutorial/TutorialPanel";
 import DeployPanel from "../deploy/DeployPanel";
@@ -239,10 +246,10 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
     const handleToggle = () => toggleCollapse();
     const handleSetPanel = (e) => {
       const panel = e.detail?.panel;
-      if (!panel) return;
-      if (isCollapsed) {
+      if (!panel || !PANEL_WIDTHS[panel]) return;
+      if (isCollapsed || activePanel !== panel) {
         setIsCollapsed(false);
-        setWidth(Math.max(panel === "tutorial" ? 420 : 340, lastWidth.current));
+        setWidth(PANEL_WIDTHS[panel]);
       }
       setActivePanel(panel);
     };
@@ -611,7 +618,7 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
             onClick={() => {
               if (isCollapsed || activePanel !== "explorer") {
                 setIsCollapsed(false);
-                setWidth(Math.max(340, lastWidth.current));
+                setWidth(PANEL_WIDTHS.explorer);
                 setActivePanel("explorer");
               } else {
                 toggleCollapse();
@@ -631,7 +638,7 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
             onClick={() => {
               if (isCollapsed || activePanel !== "github") {
                 setIsCollapsed(false);
-                setWidth(Math.max(340, lastWidth.current));
+                setWidth(PANEL_WIDTHS.github);
                 setActivePanel("github");
               } else {
                 toggleCollapse();
@@ -648,9 +655,7 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
             onClick={() => {
               if (isCollapsed || activePanel !== "tutorial") {
                 setIsCollapsed(false);
-                // Expand width for tutorials to provide better reading experience
-                const targetWidth = Math.max(420, width);
-                setWidth(targetWidth);
+                setWidth(PANEL_WIDTHS.tutorial);
                 setActivePanel("tutorial");
               } else {
                 toggleCollapse();
@@ -665,7 +670,7 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
             onClick={() => {
               if (isCollapsed || activePanel !== "deploy") {
                 setIsCollapsed(false);
-                setWidth(Math.max(340, lastWidth.current));
+                setWidth(PANEL_WIDTHS.deploy);
                 setActivePanel("deploy");
               } else {
                 toggleCollapse();
@@ -680,7 +685,7 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
             onClick={() => {
               if (isCollapsed || activePanel !== "validation") {
                 setIsCollapsed(false);
-                setWidth(Math.max(340, lastWidth.current));
+                setWidth(PANEL_WIDTHS.validation);
                 setActivePanel("validation");
               } else {
                 toggleCollapse();
