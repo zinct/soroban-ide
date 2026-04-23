@@ -16,7 +16,9 @@ import Terminal from "../features/terminal/Terminal";
 import { getLanguageFromName, getLanguageDisplayName } from "../features/editor/editorUtils";
 import { cloneNodeWithNewIds, addNodeToTree, moveNodeInTree } from "../features/workspace/workspaceUtils";
 import SettingsPanel from "../features/settings/SettingsPanel";
+import AIPanel from "../features/ai/AIPanel";
 import CommandPalette from "../features/palette/CommandPalette";
+import { Sparkles } from "lucide-react";
 import "../styles/settings.css";
 
 /**
@@ -38,6 +40,7 @@ const Layout = () => {
   const initializationStartedRef = useRef(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
+  const [showAIPanel, setShowAIPanel] = useState(false);
   const [palette, setPalette] = useState({ isOpen: false, mode: "command" });
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
@@ -417,6 +420,13 @@ const Layout = () => {
         run: () => setIsSettingsOpen((v) => !v),
       },
       {
+        id: "view.toggleAI",
+        title: showAIPanel ? "Close AI Panel" : "Open AI Panel",
+        category: "View",
+        shortcut: `${modKey}+I`,
+        run: () => setShowAIPanel((v) => !v),
+      },
+      {
         id: "terminal.clear",
         title: "Clear Terminal",
         category: "Terminal",
@@ -454,7 +464,7 @@ const Layout = () => {
         run: () => setTheme("light"),
       },
     ];
-  }, [openPalette, handleCreateProject, handleOpenGithubClone, isSettingsOpen, workspace.collapseAll, tabManager, handleCloseAllTabs, modKey]);
+  }, [openPalette, handleCreateProject, handleOpenGithubClone, isSettingsOpen, showAIPanel, workspace.collapseAll, tabManager, handleCloseAllTabs, modKey]);
 
   const handlePaletteOpenFile = useCallback(
     (fileId) => {
@@ -537,6 +547,13 @@ const Layout = () => {
                   <button className="premium-create-btn" onClick={() => setShowCreateMenu(!showCreateMenu)} title="Create New...">
                     <span className="btn-label">Create Project</span>
                   </button>
+                  <button 
+                    className={`ai-toggle-btn ${showAIPanel ? 'hidden' : ''}`} 
+                    onClick={() => setShowAIPanel(true)}
+                    title="Toggle AI Chat"
+                  >
+                    <Sparkles size={20} />
+                  </button>
                   {showCreateMenu && (
                     <div className="create-new-dropdown">
                       <div
@@ -593,6 +610,8 @@ const Layout = () => {
 
               <Terminal activeFileName={activeFile?.path} treeData={workspace.treeData} fileContents={workspace.fileContents} onFileTreeUpdate={workspace.setTreeData} />
             </div>
+
+            <AIPanel isOpen={showAIPanel} onClose={() => setShowAIPanel(false)} />
           </>
         )}
       </div>
