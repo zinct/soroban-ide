@@ -13,11 +13,7 @@ const CopyButton = ({ text }) => {
   };
 
   return (
-    <button 
-      className={`tutorial-copy-btn ${copied ? "copied" : ""}`} 
-      onClick={handleCopy}
-      title="Copy to clipboard"
-    >
+    <button className={`tutorial-copy-btn ${copied ? "copied" : ""}`} onClick={handleCopy} title="Copy to clipboard">
       {copied ? <Check size={14} /> : <Copy size={14} />}
     </button>
   );
@@ -25,8 +21,109 @@ const CopyButton = ({ text }) => {
 
 const LANGUAGES = [
   { id: "en", label: "English", flag: "🇺🇸" },
-  { id: "id", label: "Indonesia", flag: "🇮🇩" },
+  { id: "fil", label: "Filipino", flag: "🇵🇭" },
+  { id: "vi", label: "Tiếng Việt", flag: "🇻🇳" },
+  { id: "id", label: "Bahasa Indonesia", flag: "🇮🇩" },
 ];
+
+const UI = {
+  en: {
+    title: "Tutorial & Docs",
+    back: "Back",
+    resources: "Official Resources",
+    categories: {
+      basics: "Basics",
+      project: "Project",
+      contract: "Smart Contract",
+      data: "Data",
+      network: "Network",
+    },
+    sections: {
+      soroban: "Get to know Soroban",
+      studio: "Soroban Studio",
+      structure: "Project Structure",
+      contract: "Contract Anatomy",
+      variable: "Variables & Types",
+      struct: "Using Structs",
+      function: "Contract Functions",
+      storage: "Data Storage",
+      wallet: "Identity & Wallet",
+      deploy: "Deploy to Testnet",
+    },
+  },
+  id: {
+    title: "Panduan & Dokumen",
+    back: "Kembali",
+    resources: "Sumber Resmi",
+    categories: {
+      basics: "Dasar",
+      project: "Proyek",
+      contract: "Smart Contract",
+      data: "Data",
+      network: "Jaringan",
+    },
+    sections: {
+      soroban: "Mengenal Soroban",
+      studio: "Soroban Studio",
+      structure: "Struktur Proyek",
+      contract: "Anatomi Kontrak",
+      variable: "Variabel & Tipe",
+      struct: "Menggunakan Struct",
+      function: "Fungsi Kontrak",
+      storage: "Penyimpanan Data",
+      wallet: "Identitas & Wallet",
+      deploy: "Deploy ke Testnet",
+    },
+  },
+  vi: {
+    title: "Hướng dẫn & Tài liệu",
+    back: "Quay lại",
+    resources: "Tài nguyên chính thức",
+    categories: {
+      basics: "Cơ bản",
+      project: "Dự án",
+      contract: "Hợp đồng",
+      data: "Dữ liệu",
+      network: "Mạng lưới",
+    },
+    sections: {
+      soroban: "Tìm hiểu về Soroban",
+      studio: "Soroban Studio",
+      structure: "Cấu trúc dự án",
+      contract: "Cấu tạo hợp đồng",
+      variable: "Biến & Kiểu dữ liệu",
+      struct: "Sử dụng Struct",
+      function: "Hàm trong hợp đồng",
+      storage: "Lưu trữ dữ liệu",
+      wallet: "Danh tính & Ví",
+      deploy: "Triển khai Testnet",
+    },
+  },
+  fil: {
+    title: "Gabay at Dokumento",
+    back: "Bumalik",
+    resources: "Opisyal na Resources",
+    categories: {
+      basics: "Batayan",
+      project: "Proyekto",
+      contract: "Smart Contract",
+      data: "Impormasyon",
+      network: "Network",
+    },
+    sections: {
+      soroban: "Alamin ang Soroban",
+      studio: "Soroban Studio",
+      structure: "Istraktura ng Proyekto",
+      contract: "Anatomiya ng Kontrak",
+      variable: "Variables & Types",
+      struct: "Paggamit ng Struct",
+      function: "Contract Functions",
+      storage: "Data Storage",
+      wallet: "Identidad & Wallet",
+      deploy: "I-deploy sa Testnet",
+    },
+  },
+};
 
 const LangSelector = ({ currentLang, onSelect }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -61,8 +158,7 @@ const LangSelector = ({ currentLang, onSelect }) => {
               onClick={() => {
                 onSelect(l.id);
                 setIsOpen(false);
-              }}
-            >
+              }}>
               <span className="lang-flag-opt">{l.flag}</span>
               <span className="lang-opt-label">{l.label}</span>
               {l.id === currentLang && <Check size={14} className="lang-check" />}
@@ -75,16 +171,16 @@ const LangSelector = ({ currentLang, onSelect }) => {
 };
 
 const SECTIONS = [
-  { id: "soroban", title: "Soroban", category: "Basics" },
-  { id: "studio", title: "Soroban Studio", category: "Basics" },
-  { id: "structure", title: "Project Structure", category: "Project" },
-  { id: "contract", title: "Contract", category: "Smart Contract" },
-  { id: "variable", title: "Variabel & Tipe Data", category: "Smart Contract" },
-  { id: "struct", title: "Struct", category: "Smart Contract" },
-  { id: "function", title: "Contract Function", category: "Smart Contract" },
-  { id: "storage", title: "Storage", category: "Data" },
-  { id: "wallet", title: "Wallet", category: "Network" },
-  { id: "deploy", title: "Deploy to testnet", category: "Network" },
+  { id: "soroban", title: "Soroban", category: "basics" },
+  { id: "studio", title: "Soroban Studio", category: "basics" },
+  { id: "structure", title: "Project Structure", category: "project" },
+  { id: "contract", title: "Contract", category: "contract" },
+  { id: "variable", title: "Variabel & Tipe Data", category: "contract" },
+  { id: "struct", title: "Struct", category: "contract" },
+  { id: "function", title: "Contract Function", category: "contract" },
+  { id: "storage", title: "Storage", category: "data" },
+  { id: "wallet", title: "Wallet", category: "network" },
+  { id: "deploy", title: "Deploy to testnet", category: "network" },
 ];
 
 const TutorialPanel = memo(() => {
@@ -136,18 +232,21 @@ const TutorialPanel = memo(() => {
     return (
       <div className="tutorial-list-container">
         <div className="sidebar-header">
-          <div className="sidebar-title">Tutorial & Docs</div>
+          <div className="sidebar-title">{UI[lang]?.title || "Tutorial & Docs"}</div>
           <LangSelector currentLang={lang} onSelect={handleSetLang} />
         </div>
         <div className="tutorial-scroll-area">
           {categories.map((cat) => (
             <div key={cat} className="tutorial-category-group">
-              <div className="tutorial-category-title">{cat}</div>
-              {SECTIONS.filter((s) => s.category === cat).map((section) => (
-                <button key={section.id} className="tutorial-list-item" onClick={() => handleSetSelectedId(section.id)}>
-                  <span className="tutorial-item-title">{section.title}</span>
-                </button>
-              ))}
+              <div className="tutorial-category-title">{UI[lang]?.categories?.[cat] || cat}</div>
+              {SECTIONS.filter((s) => s.category === cat).map((section) => {
+                const sidebarTitle = UI[lang]?.sections?.[section.id] || section.title;
+                return (
+                  <button key={section.id} className="tutorial-list-item" onClick={() => handleSetSelectedId(section.id)}>
+                    <span className="tutorial-item-title">{sidebarTitle}</span>
+                  </button>
+                );
+              })}
             </div>
           ))}
         </div>
@@ -234,7 +333,7 @@ const TutorialPanel = memo(() => {
       <div className="tutorial-detail-container">
         <div className="sidebar-header">
           <button className="btn-text tutorial-back-btn" onClick={() => handleSetSelectedId(null)}>
-            <span>← Back</span>
+            <span>← {UI[lang]?.back || "Back"}</span>
           </button>
           <LangSelector currentLang={lang} onSelect={handleSetLang} />
         </div>
@@ -274,7 +373,7 @@ const TutorialPanel = memo(() => {
                       </div>
                     )}
                     {sec.links && (
-                      <div className="tutorial-link-grid" style={{ marginTop: '12px' }}>
+                      <div className="tutorial-link-grid" style={{ marginTop: "12px" }}>
                         {sec.links.map((link, lIdx) => (
                           <a key={lIdx} href={link.url} target="_blank" rel="noopener noreferrer" className="tutorial-external-link">
                             <span>{link.label}</span>
@@ -293,7 +392,7 @@ const TutorialPanel = memo(() => {
 
                 {content.links && (
                   <div className="tutorial-references">
-                    <h3 className="tutorial-sub">Official Resources</h3>
+                    <h3 className="tutorial-sub">{UI[lang]?.resources || "Official Resources"}</h3>
                     <div className="tutorial-link-grid">
                       {content.links.map((link, lIdx) => (
                         <a key={lIdx} href={link.url} target="_blank" rel="noopener noreferrer" className="tutorial-external-link">
@@ -319,10 +418,7 @@ const TutorialPanel = memo(() => {
 
                 <h3 className="tutorial-sub">Code Example</h3>
                 <div className="tutorial-code-block">
-                  <CodeHeader 
-                    label="rust" 
-                    copyText={`// Example code for ${selectedSection.title}\npub fn example() {\n    // Your implementation here\n}`} 
-                  />
+                  <CodeHeader label="rust" copyText={`// Example code for ${selectedSection.title}\npub fn example() {\n    // Your implementation here\n}`} />
                   <pre>
                     <code>{highlightCode(`// Example code for ${selectedSection.title}\npub fn example() {\n    // Your implementation here\n}`, "rust")}</code>
                   </pre>

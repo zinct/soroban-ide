@@ -12,7 +12,7 @@ const COLLAPSE_THRESHOLD = 120;
 const PANEL_WIDTHS = {
   explorer: 400,
   github: 450,
-  tutorial: 560,
+  tutorial: 620,
   deploy: 500,
   validation: 500,
 };

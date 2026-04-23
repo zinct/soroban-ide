@@ -296,6 +296,7 @@
   }
 }
 
+
 .create-new-dropdown {
   position: absolute;
   top: calc(100% + 4px);
@@ -540,6 +541,7 @@
   background: var(--sidebar-bg);
   color: var(--text-primary);
   overflow: hidden;
+  width: 100%;
 }
 
 .tutorial-list-container,
@@ -596,25 +598,40 @@
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.2px;
+  white-space: normal;
+  line-height: 1.4;
 }
 
 .tutorial-back-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: var(--text-muted);
-  font-weight: 500;
-  background: transparent;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 14px;
+  background: var(--sidebar-bg);
   border: none;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 10px 20px;
+  border-radius: 8px;
   transition: all 0.2s ease;
+  width: fit-content;
 }
 
 .tutorial-back-btn:hover {
-  color: var(--accent);
+  color: var(--text-primary);
   background: var(--hover-bg);
+}
+
+.tutorial-back-btn:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tutorial-detail-header {
+  padding: 24px 24px 0 24px;
+  display: flex;
+  align-items: center;
 }
 
 .tutorial-content-area {
@@ -877,17 +894,34 @@
   right: 0;
   background: var(--sidebar-bg);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
-  width: 170px;
-  padding: 6px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
-  z-index: 1000;
+  border-radius: 12px;
+  width: max-content;
+  min-width: 180px;
+  padding: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  z-index: 10000;
+  overflow: hidden;
   animation: dropdownFadeIn 0.2s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 
 @keyframes dropdownFadeIn {
   from { opacity: 0; transform: translateY(-8px) scale(0.95); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.tutorial-lang-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
 }
 
 .lang-option {
