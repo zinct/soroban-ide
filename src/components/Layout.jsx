@@ -522,7 +522,7 @@ const Layout = () => {
             <div className={`project-creation-overlay ${isCreatingProject ? "visible" : ""}`}>
               <div className="project-creation-content">
                 <div className="loading-spinner"></div>
-                <div className="loading-text">Creating Soroban Project...</div>
+                <div className="loading-text">Initializing Project...</div>
                 <div className="loading-subtext">Initializing template from backend...</div>
               </div>
             </div>
@@ -564,6 +564,19 @@ const Layout = () => {
                           <polyline points="14 2 14 8 20 8" />
                         </svg>
                         Create Workshop Template
+                      </div>
+                      <div
+                        className="create-new-item"
+                        onClick={() => {
+                          handleCreateProject("frontend");
+                          setShowCreateMenu(false);
+                        }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                          <line x1="8" y1="21" x2="16" y2="21" />
+                          <line x1="12" y1="17" x2="12" y2="21" />
+                        </svg>
+                        Create Frontend Project
                       </div>
                       <div className="create-new-item" onClick={handleOpenGithubClone}>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

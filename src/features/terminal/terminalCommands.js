@@ -10,7 +10,7 @@
  * Check if a command should be routed to the backend.
  * Must match backend allowedPrefixes in run.go
  */
-const BACKEND_PREFIXES = ["stellar"];
+const BACKEND_PREFIXES = ["stellar", "soroban", "npm", "pnpm", "yarn", "node", "cargo", "git"];
 
 export const isBackendCommand = (cmd) => {
   const first = cmd.trim().split(/\s+/)[0]?.toLowerCase();

@@ -35,6 +35,16 @@ const getSessionId = () => {
 };
 
 /**
+ * Gets the preview URL for a given session.
+ */
+export const getPreviewUrl = (sessionId = getSessionId()) => {
+  if (API_BASE.startsWith("http")) {
+    return `${API_BASE}/preview/${sessionId}/`;
+  }
+  return `${window.location.origin}${API_BASE}/preview/${sessionId}/`;
+};
+
+/**
  * Reset the session ID (e.g., when creating a brand new project from scratch).
  */
 export const resetSessionId = () => {
@@ -52,7 +62,8 @@ export const collectProjectFiles = (treeData, fileContents, options = {}) => {
   
   // Only allow source-related extensions
   const ALLOWED_EXTENSIONS = [
-    ".rs", ".toml", ".json", ".js", ".ts", ".md", ".txt", ".yaml", ".yml", ".wasm",
+    ".rs", ".toml", ".json", ".js", ".jsx", ".ts", ".tsx", ".css", ".scss", ".html", ".svg",
+    ".md", ".txt", ".yaml", ".yml", ".wasm",
     "LICENSE", "Makefile", "Cargo.lock"
   ];
 

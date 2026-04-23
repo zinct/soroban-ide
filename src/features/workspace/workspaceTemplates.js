@@ -3,13 +3,14 @@
  * This removes the need to hardcode strings and allows for easy updates.
  * We include all files except .git metadata.
  */
-const helloWorldFiles = import.meta.glob('../../templates/hello-world/**/*', { as: 'raw', eager: true });
+const helloWorldFiles = import.meta.glob("../../templates/hello-world/**/*", { query: "?raw", import: "default", eager: true });
+const frontendFiles = import.meta.glob("../../templates/frontend/**/*", { query: "?raw", import: "default", eager: true });
 
 /**
  * Helper to build a tree and contents from a flat template object or Vite glob.
  */
-const buildFromTemplate = (rootName, templates, pathPrefix = '') => {
-  const tree = [{ id: rootName, name: rootName, type: 'folder', children: [] }];
+const buildFromTemplate = (rootName, templates, pathPrefix = "") => {
+  const tree = [{ id: rootName, name: rootName, type: "folder", children: [] }];
   const contents = {};
 
   Object.entries(templates).forEach(([fullKey, content]) => {
@@ -20,19 +21,19 @@ const buildFromTemplate = (rootName, templates, pathPrefix = '') => {
     if (pathPrefix) {
       const index = fullKey.indexOf(pathPrefix);
       if (index !== -1) {
-        relativePath = fullKey.substring(index + pathPrefix.length).replace(/^\/+/, '');
+        relativePath = fullKey.substring(index + pathPrefix.length).replace(/^\/+/, "");
       }
     }
 
     // 2. Ignore internal files (.git, etc.)
-    if (relativePath.includes('.git/') || relativePath.endsWith('.git')) {
+    if (relativePath.includes(".git/") || relativePath.endsWith(".git")) {
       return;
     }
 
     const fullPath = `${rootName}/${relativePath}`;
     contents[fullPath] = content;
 
-    const parts = relativePath.split('/');
+    const parts = relativePath.split("/");
     let currentLevel = tree[0].children;
     let currentPath = rootName;
 
@@ -45,7 +46,7 @@ const buildFromTemplate = (rootName, templates, pathPrefix = '') => {
         node = {
           id: currentPath,
           name: part,
-          type: isFile ? 'file' : 'folder',
+          type: isFile ? "file" : "folder",
           children: [],
         };
         currentLevel.push(node);
@@ -58,13 +59,16 @@ const buildFromTemplate = (rootName, templates, pathPrefix = '') => {
 };
 
 export const createHelloWorldWorkspace = () => {
-  // Pass "../../templates/hello-world" as the prefix to extract clean relative paths
-  return buildFromTemplate('hello-world', helloWorldFiles, '../../templates/hello-world');
+  return buildFromTemplate("hello-world", helloWorldFiles, "../../templates/hello-world");
+};
+
+export const createFrontendWorkspace = () => {
+  return buildFromTemplate("frontend", frontendFiles, "../../templates/frontend");
 };
 
 export const createBlankWorkspace = () => {
-  return buildFromTemplate('blank-project', {
-    'README.md': '# Blank Project\n\nStart building your project here.\n',
+  return buildFromTemplate("blank-project", {
+    "README.md": "# Blank Project\n\nStart building your project here.\n",
   });
 };
 
