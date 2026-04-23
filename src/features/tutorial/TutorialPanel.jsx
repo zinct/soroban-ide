@@ -1,5 +1,5 @@
-import React, { memo, useState, useMemo } from "react";
-import { Copy, Check } from "lucide-react";
+import React, { memo, useState, useMemo, useRef, useEffect } from "react";
+import { Copy, Check, ChevronRight } from "lucide-react";
 import { tutorialData } from "./tutorialData";
 import { loadState, saveStateSection } from "../../utils/storage";
 
@@ -20,6 +20,57 @@ const CopyButton = ({ text }) => {
     >
       {copied ? <Check size={14} /> : <Copy size={14} />}
     </button>
+  );
+};
+
+const LANGUAGES = [
+  { id: "en", label: "English", flag: "🇺🇸" },
+  { id: "id", label: "Indonesia", flag: "🇮🇩" },
+];
+
+const LangSelector = ({ currentLang, onSelect }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+  const selected = LANGUAGES.find((l) => l.id === currentLang) || LANGUAGES[0];
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
+
+  return (
+    <div className="tutorial-lang-dropdown-container" ref={containerRef}>
+      <button className={`tutorial-lang-dropdown-trigger ${isOpen ? "open" : ""}`} onClick={() => setIsOpen(!isOpen)}>
+        <span className="lang-flag-main">{selected.flag}</span>
+        <span className="lang-id-label">{selected.id.toUpperCase()}</span>
+        <ChevronRight size={14} className={`dropdown-arrow ${isOpen ? "open" : ""}`} />
+      </button>
+      {isOpen && (
+        <div className="tutorial-lang-dropdown-menu">
+          {LANGUAGES.map((l) => (
+            <button
+              key={l.id}
+              className={`lang-option ${l.id === currentLang ? "active" : ""}`}
+              onClick={() => {
+                onSelect(l.id);
+                setIsOpen(false);
+              }}
+            >
+              <span className="lang-flag-opt">{l.flag}</span>
+              <span className="lang-opt-label">{l.label}</span>
+              {l.id === currentLang && <Check size={14} className="lang-check" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -86,15 +137,7 @@ const TutorialPanel = memo(() => {
       <div className="tutorial-list-container">
         <div className="sidebar-header">
           <div className="sidebar-title">Tutorial & Docs</div>
-          <div className="tutorial-lang-selector">
-            <button className={`lang-btn ${lang === "id" ? "active" : ""}`} onClick={() => handleSetLang("id")} title="Bahasa Indonesia">
-              ID
-            </button>
-            <div className="lang-divider"></div>
-            <button className={`lang-btn ${lang === "en" ? "active" : ""}`} onClick={() => handleSetLang("en")} title="English">
-              EN
-            </button>
-          </div>
+          <LangSelector currentLang={lang} onSelect={handleSetLang} />
         </div>
         <div className="tutorial-scroll-area">
           {categories.map((cat) => (
@@ -193,15 +236,7 @@ const TutorialPanel = memo(() => {
           <button className="btn-text tutorial-back-btn" onClick={() => handleSetSelectedId(null)}>
             <span>← Back</span>
           </button>
-          <div className="tutorial-lang-selector">
-            <button className={`lang-btn ${lang === "id" ? "active" : ""}`} onClick={() => handleSetLang("id")}>
-              ID
-            </button>
-            <div className="lang-divider"></div>
-            <button className={`lang-btn ${lang === "en" ? "active" : ""}`} onClick={() => handleSetLang("en")}>
-              EN
-            </button>
-          </div>
+          <LangSelector currentLang={lang} onSelect={handleSetLang} />
         </div>
 
         <div className="tutorial-content-area">

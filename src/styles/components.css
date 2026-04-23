@@ -823,41 +823,117 @@
   margin-top: 24px;
 }
 
-.tutorial-lang-selector {
+.tutorial-lang-dropdown-container {
+  position: relative;
+  margin-left: auto;
+}
+
+.tutorial-lang-dropdown-trigger {
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.03);
-  padding: 2px;
-  border-radius: 6px;
+  gap: 10px;
+  background: var(--tab-bg);
   border: 1px solid var(--border-color);
-}
-
-.lang-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 8px;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-}
-
-.lang-btn:hover {
+  padding: 6px 14px;
+  border-radius: 8px;
   color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  min-width: 80px;
+  justify-content: space-between;
 }
 
-.lang-btn.active {
-  background: var(--accent);
-  color: var(--accent-contrast);
+.tutorial-lang-dropdown-trigger:hover,
+.tutorial-lang-dropdown-trigger.open {
+  background: var(--hover-bg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-.lang-divider {
-  width: 1px;
-  height: 12px;
-  background: var(--border-color);
-  margin: 0 4px;
+.lang-flag-main {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.lang-id-label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.dropdown-arrow {
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+  margin-left: 4px;
+}
+
+.dropdown-arrow.open {
+  transform: rotate(90deg);
+}
+
+.tutorial-lang-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--sidebar-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  width: 170px;
+  padding: 6px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  animation: dropdownFadeIn 0.2s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes dropdownFadeIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.lang-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 14px;
+  font-family: inherit;
+  margin-bottom: 2px;
+}
+
+.lang-option:last-child {
+  margin-bottom: 0;
+}
+
+.lang-option:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+  transform: translateX(2px);
+}
+
+.lang-option.active {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.lang-flag-opt {
+  font-size: 16px;
+}
+
+.lang-opt-label {
+  flex: 1;
+  text-align: left;
+}
+
+.lang-check {
+  color: var(--accent);
 }
 
 .tutorial-references {
