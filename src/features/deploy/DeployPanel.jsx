@@ -219,6 +219,10 @@ const DeployPanel = ({ treeData, fileContents }) => {
                 }));
               }
               setDeployStatus("success");
+              try {
+                const result2 = await getContractInterface(files);
+                setContractFunctions(result2.functions || []);
+              } catch (_) {}
             } catch (err) {
               window.dispatchEvent(new CustomEvent("soroban:terminalAppend", {
                 detail: { type: "error", content: `❌ Freighter sign failed: ${err.message}` }
@@ -229,6 +233,10 @@ const DeployPanel = ({ treeData, fileContents }) => {
             const match = fullLog.match(/C[A-Z2-7]{55}/);
             if (match) setDeployedContractId(match[0]);
             setDeployStatus("success");
+            try {
+              const result = await getContractInterface(files);
+              setContractFunctions(result.functions || []);
+            } catch (_) {}
           }
           cleanup();
         },
