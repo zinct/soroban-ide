@@ -5,6 +5,7 @@
   flex-direction: row;
   height: 100%;
   position: relative;
+  z-index: 500;
 }
 
 .sidebar {
@@ -16,8 +17,9 @@
   flex-direction: row; /* Changed to horizontal */
   border-right: 1px solid var(--border-color);
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); /* Smoother, more premium transition */
-  overflow: hidden;
-  z-index: 50;
+  overflow: visible; /* Changed from hidden to allow header to overflow */
+  position: relative;
+  z-index: 100;
 }
 
 .sidebar.resizing {
@@ -80,7 +82,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0; 
-  overflow: hidden;
+  overflow: visible; /* Changed from hidden to allow header to overflow */
   transition: 
     opacity 0.3s ease 0.1s,
     transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.1s;
@@ -192,7 +194,7 @@
   overflow: visible;
   white-space: nowrap;
   position: relative;
-  z-index: 100;
+  z-index: 501;
 }
 
 .sidebar-title {
