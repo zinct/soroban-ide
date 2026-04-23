@@ -662,7 +662,7 @@ html body #app .sidebar-wrapper .sidebar-body .sidebar-node .sidebar-folder.lazy
 /* ULTIMATE OVERRIDE: Use attribute selector for maximum specificity */
 .sidebar-wrapper .sidebar-body .sidebar-node button[class*="lazy-folder"],
 .sidebar-wrapper .sidebar-body .sidebar-node button[class*="lazy-folder"]:hover,
-.sidebar-wrapper .sidebar-body .sidebar-node button[class*="lazy-folder"]:selected,
+.sidebar-wrapper .sidebar-body .sidebar-node button[class*="lazy-folder"]:focus,
 .sidebar-wrapper .sidebar-body .sidebar-node button[class*="lazy-folder"]:active {
   color: var(--text-muted) !important;
   opacity: 0.5 !important;
