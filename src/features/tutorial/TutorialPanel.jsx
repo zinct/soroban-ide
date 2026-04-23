@@ -37,7 +37,9 @@ const SECTIONS = [
 ];
 
 const TutorialPanel = memo(() => {
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId, setSelectedId] = useState(() => {
+    return loadState()?.tutorial?.selectedId || null;
+  });
   const [lang, setLang] = useState(() => {
     const saved = loadState()?.tutorial?.lang;
     return saved || "en";
@@ -45,7 +47,14 @@ const TutorialPanel = memo(() => {
 
   const handleSetLang = (newLang) => {
     setLang(newLang);
-    saveStateSection("tutorial", { lang: newLang });
+    const current = loadState()?.tutorial || {};
+    saveStateSection("tutorial", { ...current, lang: newLang });
+  };
+
+  const handleSetSelectedId = (id) => {
+    setSelectedId(id);
+    const current = loadState()?.tutorial || {};
+    saveStateSection("tutorial", { ...current, selectedId: id });
   };
 
   const selectedSection = useMemo(() => SECTIONS.find((s) => s.id === selectedId), [selectedId]);
@@ -92,7 +101,7 @@ const TutorialPanel = memo(() => {
             <div key={cat} className="tutorial-category-group">
               <div className="tutorial-category-title">{cat}</div>
               {SECTIONS.filter((s) => s.category === cat).map((section) => (
-                <button key={section.id} className="tutorial-list-item" onClick={() => setSelectedId(section.id)}>
+                <button key={section.id} className="tutorial-list-item" onClick={() => handleSetSelectedId(section.id)}>
                   <span className="tutorial-item-title">{section.title}</span>
                 </button>
               ))}
@@ -181,7 +190,7 @@ const TutorialPanel = memo(() => {
     return (
       <div className="tutorial-detail-container">
         <div className="sidebar-header">
-          <button className="btn-text tutorial-back-btn" onClick={() => setSelectedId(null)}>
+          <button className="btn-text tutorial-back-btn" onClick={() => handleSetSelectedId(null)}>
             <span>← Back</span>
           </button>
           <div className="tutorial-lang-selector">

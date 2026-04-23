@@ -10,8 +10,8 @@ const MIN_WIDTH = 260;
 const MAX_WIDTH = 1200;
 const COLLAPSE_THRESHOLD = 120;
 const PANEL_WIDTHS = {
-  explorer: 340,
-  github: 380,
+  explorer: 400,
+  github: 450,
   tutorial: 560,
   deploy: 500,
   validation: 500,

@@ -85,6 +85,19 @@ const Layout = () => {
     [workspace, tabManager],
   );
 
+  // Handle body scroll blocking for all modals
+  useEffect(() => {
+    const isAnyModalOpen = palette.isOpen || showGithubClone || confirmModal.isOpen || isSettingsOpen;
+    if (isAnyModalOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [palette.isOpen, showGithubClone, confirmModal.isOpen, isSettingsOpen]);
+
   // Handle delete with tab cleanup
   const handleDeleteItem = useCallback(
     (nodeId) => {
@@ -598,10 +611,7 @@ const Layout = () => {
         </div>
       </div>
 
-      <div 
-        className={`github-clone-overlay ${showGithubClone ? "visible" : ""}`}
-        onClick={(e) => e.target === e.currentTarget && setShowGithubClone(false)}
-      >
+      <div className={`github-clone-overlay ${showGithubClone ? "visible" : ""}`} onClick={(e) => e.target === e.currentTarget && setShowGithubClone(false)}>
         <div className="github-clone-dialog">
           <h3>Clone GitHub Repository</h3>
           <input
@@ -629,10 +639,7 @@ const Layout = () => {
 
       <CommandPalette isOpen={palette.isOpen} mode={palette.mode} commands={paletteCommands} files={paletteFiles} onClose={closePalette} onOpenFile={handlePaletteOpenFile} />
 
-      <div 
-        className={`github-clone-overlay ${confirmModal.isOpen ? "visible" : ""}`}
-        onClick={(e) => e.target === e.currentTarget && setConfirmModal({ ...confirmModal, isOpen: false })}
-      >
+      <div className={`github-clone-overlay ${confirmModal.isOpen ? "visible" : ""}`} onClick={(e) => e.target === e.currentTarget && setConfirmModal({ ...confirmModal, isOpen: false })}>
         <div className="github-clone-dialog">
           <h3>{confirmModal.title}</h3>
           <p className="confirmation-message">{confirmModal.message}</p>
