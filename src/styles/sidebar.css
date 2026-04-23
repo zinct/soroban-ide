@@ -189,8 +189,10 @@
   padding: 0 12px;
   border-bottom: 1px solid var(--border-color);
   background: var(--sidebar-bg);
-  overflow: hidden;
+  overflow: visible;
   white-space: nowrap;
+  position: relative;
+  z-index: 100;
 }
 
 .sidebar-title {
