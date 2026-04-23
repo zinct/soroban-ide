@@ -40,7 +40,7 @@ const Layout = () => {
   const initializationStartedRef = useRef(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
-  const [showAIPanel, setShowAIPanel] = useState(false);
+  const [showAIPanel, setShowAIPanel] = useState(() => localStorage.getItem("ai_panel_open") === "true");
   const [palette, setPalette] = useState({ isOpen: false, mode: "command" });
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
@@ -71,6 +71,11 @@ const Layout = () => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("theme", theme);
   }, [theme]);
+
+  // Persist AI Panel state
+  useEffect(() => {
+    localStorage.setItem("ai_panel_open", showAIPanel);
+  }, [showAIPanel]);
 
   // Derived state
   const activeFile = tabManager.activeFileId ? workspace.flattenedNodes.get(tabManager.activeFileId) : null;

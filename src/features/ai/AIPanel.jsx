@@ -1,10 +1,69 @@
-import React, { useState, useRef, useEffect } from "react";
-import { Sparkles, X, ArrowUp, User, Bot, MessageSquare, Plus } from "lucide-react";
+import React, { useState, useRef, useEffect, memo, useMemo, useLayoutEffect } from "react";
+import { Sparkles, X, ArrowUp, User, Bot, MessageSquare, Plus, Copy, Check, ArrowDown } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import remarkGfm from "remark-gfm";
 import "../../styles/ai.css";
+import { streamChatWithAI } from "../../services/ai";
 
 const MIN_WIDTH = 300;
 const MAX_WIDTH = 800;
 const COLLAPSE_THRESHOLD = 200;
+
+const CodeBlock = memo(({ children, className, ...props }) => {
+  const [copied, setCopied] = useState(false);
+  const match = /language-(\w+)/.exec(className || "");
+  const code = String(children).replace(/\n$/, "");
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="ai-code-block-container">
+      <div className="ai-code-block-header">
+        <span className="ai-code-lang">{match ? match[1] : "code"}</span>
+        <button className="ai-copy-btn" onClick={handleCopy}>
+          {copied ? <Check size={14} /> : <Copy size={14} />}
+          <span>{copied ? "Copied" : "Copy"}</span>
+        </button>
+      </div>
+      <SyntaxHighlighter
+        style={vscDarkPlus}
+        language={match ? match[1] : "javascript"}
+        PreTag="div"
+        className="ai-syntax-highlighter"
+        {...props}
+      >
+        {code}
+      </SyntaxHighlighter>
+    </div>
+  );
+});
+
+const AIMessage = memo(({ text, sender }) => {
+  return (
+    <div className={`ai-message ${sender}`}>
+      <div className="ai-message-text">
+        {sender === "assistant" ? (
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              code: CodeBlock,
+            }}
+          >
+            {text}
+          </ReactMarkdown>
+        ) : (
+          text
+        )}
+      </div>
+    </div>
+  );
+});
 
 const AIPanel = ({ isOpen, onClose }) => {
   const [width, setWidth] = useState(() => {
@@ -14,11 +73,23 @@ const AIPanel = ({ isOpen, onClose }) => {
   const [isResizing, setIsResizing] = useState(false);
   const [isMultiline, setIsMultiline] = useState(false);
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(() => {
+    const saved = localStorage.getItem("ai_chat_history");
+    try {
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error("Failed to parse AI history:", e);
+      return [];
+    }
+  });
+  const [streamingText, setStreamingText] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
   const textareaRef = useRef(null);
   const dragStartX = useRef(0);
   const dragStartWidth = useRef(0);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -85,40 +156,111 @@ const AIPanel = ({ isOpen, onClose }) => {
     };
   }, [isResizing, width]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = (forceInstant = false) => {
+    if (!chatContainerRef.current) return;
+    
+    const performScroll = () => {
+      if (!chatContainerRef.current) return;
+      if (forceInstant || isLoading) {
+        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+      } else {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }
+    };
+
+    // Immediate scroll
+    performScroll();
+    
+    // Double-check on the next frame to catch any layout changes from Markdown rendering
+    if (isLoading || forceInstant) {
+      requestAnimationFrame(performScroll);
+    }
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  useLayoutEffect(() => {
+    if (shouldAutoScroll) {
+      scrollToBottom();
+    }
+  }, [messages, streamingText, shouldAutoScroll]);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
+  // Optimized persistence: Save to localStorage with a debounce to avoid lag 
+  // during real-time streaming updates.
+  useEffect(() => {
+    const delay = isLoading ? 1500 : 300; // Save less frequently during stream
+    const timeoutId = setTimeout(() => {
+      localStorage.setItem("ai_chat_history", JSON.stringify(messages));
+    }, delay);
+    
+    return () => clearTimeout(timeoutId);
+  }, [messages, isLoading]);
+
+  const handleScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    // Lower threshold (20px) makes it easier to "break" out of auto-scroll by scrolling up,
+    // while still being reliable enough to stick when at the bottom.
+    const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 20;
+    setShouldAutoScroll(isAtBottom);
+  };
+
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
 
     // Collapse 3 or more newlines into exactly two
     const processedText = input.trim().replace(/\n\n+/g, "\n\n");
+    const userInput = processedText;
 
     const userMessage = {
       id: Date.now(),
-      text: processedText,
+      text: userInput,
       sender: "user",
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
+    setIsLoading(true);
+    setShouldAutoScroll(true);
+    
+    // Force an instant scroll immediately on send
+    setTimeout(() => scrollToBottom(true), 0);
 
-    // Simulate AI response
-    setTimeout(() => {
-      const assistantMessage = {
+    try {
+      const chatHistory = messages.map((m) => ({
+        role: m.sender === "user" ? "user" : "assistant",
+        content: m.text,
+      }));
+      chatHistory.push({ role: "user", content: userInput });
+
+      let finalAssistantText = "";
+      await streamChatWithAI(chatHistory, (fullText) => {
+        finalAssistantText = fullText;
+        setStreamingText(fullText);
+      });
+
+      if (finalAssistantText) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now(),
+            text: finalAssistantText,
+            sender: "assistant",
+            timestamp: new Date(),
+          },
+        ]);
+      }
+      setStreamingText("");
+    } catch (error) {
+      console.error("AI Error:", error);
+      const errorMessage = {
         id: Date.now() + 1,
-        text: "I'm your Soroban AI assistant. How can I help you today with your Stellar smart contracts?",
+        text: "Sorry, I'm having trouble connecting right now. Please try again later.",
         sender: "assistant",
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, assistantMessage]);
-    }, 1000);
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const clearChat = () => {
@@ -139,7 +281,6 @@ const AIPanel = ({ isOpen, onClose }) => {
       <div className="ai-panel-content" style={{ width }}>
         <div className="ai-panel-header">
           <div className="ai-panel-title">
-            <Sparkles size={18} />
             <span>Soroban AI</span>
           </div>
           <div className="ai-panel-header-actions">
@@ -152,32 +293,54 @@ const AIPanel = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        <div className="ai-chat-messages">
+        <div className="ai-chat-messages" onScroll={handleScroll} ref={chatContainerRef}>
           <div className="ai-chat-messages-inner">
-            {messages.length === 0 ? (
+            {messages.length === 0 && !streamingText ? (
               <div className="ai-welcome">
-                <div className="ai-welcome-icon">
-                  <Sparkles size={48} />
-                </div>
-                <h3>Hello! I'm your AI Assistant</h3>
+                <h3>how can i help?</h3>
                 <p>Ask me anything about Soroban, Rust, or Stellar development.</p>
               </div>
             ) : (
-              messages.map((msg) => (
-                <div key={msg.id} className={`ai-message ${msg.sender}`}>
-                  <div className="ai-message-text">{msg.text}</div>
+              <>
+                {messages.map((msg) => (
+                  <AIMessage key={msg.id} text={msg.text} sender={msg.sender} />
+                ))}
+                {streamingText && (
+                  <AIMessage key="streaming" text={streamingText} sender="assistant" />
+                )}
+              </>
+            )}
+            {isLoading && (
+              <div className="ai-message assistant">
+                <div className="ai-message-text ai-loading">
+                  <span className="dot">.</span>
+                  <span className="dot">.</span>
+                  <span className="dot">.</span>
                 </div>
-              ))
+              </div>
             )}
             <div ref={messagesEndRef} />
           </div>
         </div>
 
+        {!shouldAutoScroll && messages.length > 0 && (
+          <button
+            className="ai-scroll-bottom-btn"
+            onClick={() => {
+              setShouldAutoScroll(true);
+              scrollToBottom(true);
+            }}
+            title="Latest messages"
+          >
+            <ArrowDown size={18} />
+          </button>
+        )}
+
         <div className="ai-chat-input-container">
           <div className={`ai-chat-input-wrapper ${isMultiline ? "multiline" : ""}`}>
-            <textarea ref={textareaRef} className="ai-chat-input" placeholder="Type a message..." value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} rows={1} />
+            <textarea ref={textareaRef} className="ai-chat-input" placeholder="Type a message..." value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} rows={1} disabled={isLoading} />
             <div className="ai-chat-input-actions">
-              <button className="ai-send-btn" onClick={handleSend} disabled={!input.trim()}>
+              <button className="ai-send-btn" onClick={handleSend} disabled={!input.trim() || isLoading}>
                 <ArrowUp size={18} />
               </button>
             </div>
