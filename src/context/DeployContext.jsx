@@ -1,17 +1,33 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 
 const DeployContext = createContext(null);
 
+const STORAGE_KEY = "soroban_deploy_state";
+
+const load = () => {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; }
+};
+
 export const DeployProvider = ({ children }) => {
-  const [defaultWallet, setDefaultWallet] = useState(null); // WalletStatusResponse
+  const saved = load();
+
+  const [defaultWallet, setDefaultWallet] = useState(null);
   const [walletLoading, setWalletLoading] = useState(false);
+  const [compileStatus, setCompileStatus] = useState(saved.compileStatus || null);
+  const [deployStatus, setDeployStatus] = useState(saved.deployStatus || null);
+  const [deployedContractId, setDeployedContractId] = useState(saved.deployedContractId || null);
+  const [contractFunctions, setContractFunctions] = useState(saved.contractFunctions || []);
+  const [validationResult, setValidationResult] = useState(null);
 
-  const [compileStatus, setCompileStatus] = useState(null); // null | "running" | "success" | "error"
-  const [deployStatus, setDeployStatus] = useState(null);   // null | "running" | "success" | "error"
-  const [deployedContractId, setDeployedContractId] = useState(null);
-
-  const [contractFunctions, setContractFunctions] = useState([]); // ContractFn[]
-  const [validationResult, setValidationResult] = useState(null); // ValidateResponse
+  // Persist whenever key state changes
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      compileStatus,
+      deployStatus,
+      deployedContractId,
+      contractFunctions,
+    }));
+  }, [compileStatus, deployStatus, deployedContractId, contractFunctions]);
 
   const resetDeploy = useCallback(() => {
     setCompileStatus(null);

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
-import { isFreighterConnected, getFreighterAddress, connectFreighter } from "../services/freighter";
+import { isFreighterConnected, getFreighterAddress, getFreighterNetwork, connectFreighter } from "../services/freighter";
 import { registerFreighterWallet } from "../services/backendService";
 
 const ContractContext = createContext(null);
@@ -17,9 +17,10 @@ export const ContractProvider = ({ children }) => {
       try {
         const connected = await isFreighterConnected();
         if (connected) {
-          const { address } = await getFreighterAddress();
+          const [{ address }, net] = await Promise.all([getFreighterAddress(), getFreighterNetwork()]);
           if (address) {
             setWalletAddress(address);
+            setWalletNetwork(net?.network || null);
             registerFreighterWallet(address).catch(() => {});
           }
         }

@@ -9,6 +9,7 @@ import {
   submitCommand,
   connectBuildStream,
   collectProjectFiles,
+  getSessionId,
 } from "../../services/backendService";
 import { signAndSubmitWithFreighter } from "../../services/freighter";
 
@@ -57,11 +58,12 @@ const DeployPanel = ({ treeData, fileContents }) => {
   const [walletError, setWalletError] = useState(null);
   const [freighterBalance, setFreighterBalance] = useState(null);
   const [alias, setAlias] = useState("my-contract");
-  const [sourceAccount, setSourceAccount] = useState("default"); // "default" | "freighter"
+  const [sourceAccount, setSourceAccount] = useState("default");
   const [copied, setCopied] = useState(false);
   const [invokeResults, setInvokeResults] = useState({});
   const [fnArgs, setFnArgs] = useState({});
   const [invokingFn, setInvokingFn] = useState(null);
+  const [showReplaceDialog, setShowReplaceDialog] = useState(false);
 
   // Detect contract folder name
   const contractFolderName = useCallback(() => {
@@ -93,7 +95,9 @@ const DeployPanel = ({ treeData, fileContents }) => {
       .catch(() => {});
   }, [walletAddress]);
 
+  const aliasEditedRef = React.useRef(false);
   useEffect(() => {
+    if (aliasEditedRef.current) return;
     const name = contractFolderName();
     if (name) setAlias(name);
   }, [contractFolderName]);
@@ -154,6 +158,14 @@ const DeployPanel = ({ treeData, fileContents }) => {
 
   const handleDeploy = useCallback(async () => {
     if (compileStatus !== "success") return;
+    if (deployedContractId) {
+      setShowReplaceDialog(true);
+      return;
+    }
+    await executeDeploy();
+  }, [compileStatus, deployedContractId]);
+
+  const executeDeploy = useCallback(async () => {
     setDeployStatus("running");
     const files = collectProjectFiles(treeData, fileContents);
     const contractName = (contractFolderName() || alias).replace(/-/g, "_");
@@ -163,7 +175,10 @@ const DeployPanel = ({ treeData, fileContents }) => {
     const buildOnly = useFreighter ? " --build-only" : "";
     // Random salt prevents contract ID collision on re-deploy
     const salt = Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2, "0")).join("");
-    const cmd = `stellar contract deploy --wasm ${wasmPath} --source ${sourceKey} --network testnet --alias ${alias} --salt ${salt}${buildOnly}`;
+    // Prefix alias with short session ID to avoid collisions between users on shared server key
+    const sessionPrefix = getSessionId().slice(0, 8);
+    const scopedAlias = `${sessionPrefix}-${alias}`;
+    const cmd = `stellar contract deploy --wasm ${wasmPath} --source ${sourceKey} --network testnet --alias ${scopedAlias} --salt ${salt}${buildOnly}`;
 
     try {
       const { sessionId, jobId } = await submitCommand(files, cmd);
@@ -225,7 +240,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
         detail: { type: "error", content: err.message }
       }));
     }
-  }, [compileStatus, treeData, fileContents, alias, sourceAccount, walletAddress, defaultWallet, contractFolderName]);
+  }, [treeData, fileContents, alias, sourceAccount, walletAddress, defaultWallet, contractFolderName]);
 
   // ─── Invoke → stream to Terminal ─────────────────────────────────────────
 
@@ -234,10 +249,14 @@ const DeployPanel = ({ treeData, fileContents }) => {
     setInvokingFn(fn.name);
     const args = fnArgs[fn.name] || {};
     const params = fn.params || [];
-    const argStr = params.map(p => `--${p.name} ${args[p.name] || '""'}`).join(" ");
+    const argStr = params.map(p => {
+      const val = args[p.name] ?? "";
+      const quoted = val.includes(" ") ? `"${val}"` : (val || '""');
+      return `--${p.name} ${quoted}`;
+    }).join(" ");
     const sendFlag = fn.category === "write" ? " --send=yes" : "";
     const sourceKey = defaultWallet?.name || "stellar-ide-default";
-    const cmd = `stellar contract invoke --id ${deployedContractId} --source ${sourceKey} --network testnet -- ${fn.name} ${argStr}${sendFlag}`.trim();
+    const cmd = `stellar contract invoke --id ${deployedContractId} --source ${sourceKey} --network testnet${sendFlag} -- ${fn.name} ${argStr}`.trim();
     const files = collectProjectFiles(treeData, fileContents);
     try {
       const { sessionId, jobId } = await submitCommand(files, cmd);
@@ -254,7 +273,8 @@ const DeployPanel = ({ treeData, fileContents }) => {
         },
         onError: () => { setInvokeResults(r => ({ ...r, [fn.name]: { error: "Failed" } })); setInvokingFn(null); cleanup?.(); },
         onDone: () => {
-          setInvokeResults(r => ({ ...r, [fn.name]: { output: out.trim() } }));
+          const failed = out.includes("error:") || out.includes("Command failed");
+          setInvokeResults(r => ({ ...r, [fn.name]: failed ? { error: out.trim() } : { output: out.trim() } }));
           setInvokingFn(null);
           cleanup();
         },
@@ -280,6 +300,21 @@ const DeployPanel = ({ treeData, fileContents }) => {
 
   return (
     <div className="deploy-panel">
+      {showReplaceDialog && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(4px)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:10,padding:"28px 28px 24px",maxWidth:400,width:"90%"}}>
+            <div style={{fontWeight:600,fontSize:15,color:"#fff",marginBottom:12,fontFamily:"monospace"}}>Replace Deployed Contract?</div>
+            <div style={{color:"#999",fontSize:13,lineHeight:1.7,marginBottom:20,fontFamily:"monospace"}}>
+              This will deploy a new contract and replace:<br/>
+              <span style={{color:"#fff",fontSize:11,wordBreak:"break-all"}}>{deployedContractId}</span>
+            </div>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button onClick={() => setShowReplaceDialog(false)} style={{padding:"8px 18px",fontSize:13,borderRadius:6,border:"1px solid #333",background:"transparent",color:"#ccc",cursor:"pointer",fontFamily:"monospace"}}>Cancel</button>
+              <button onClick={() => { setShowReplaceDialog(false); executeDeploy(); }} style={{padding:"8px 18px",fontSize:13,borderRadius:6,border:"none",background:"#fff",color:"#000",cursor:"pointer",fontWeight:600,fontFamily:"monospace"}}>Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ── Wallet ── */}
       <Section icon={<Wallet size={14} />} title="Wallet">
         <div className="deploy-subsection">
@@ -366,7 +401,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
       <Section icon={<Rocket size={14} />} title="Deploy Contract" badge={<StatusBadge status={deployStatus} />}>
         <div className="deploy-form-group">
           <label className="deploy-label">Contract Alias</label>
-          <input className="deploy-input" value={alias} onChange={e => setAlias(e.target.value)} placeholder="my-contract" />
+          <input className="deploy-input" value={alias} onChange={e => { aliasEditedRef.current = true; setAlias(e.target.value); }} placeholder="my-contract" />
         </div>
 
         <div className="deploy-form-group">
@@ -467,7 +502,7 @@ const FnCard = ({ fn, fnArgs, setFnArgs, onInvoke, invoking, result }) => {
         {invoking ? "Calling…" : "Call"}
       </button>
       {result?.error && <pre className="deploy-fn-result error">{result.error}</pre>}
-      {resultValue && <pre className="deploy-fn-result success">{resultValue}</pre>}
+      {!result?.error && resultValue && <pre className="deploy-fn-result success">{resultValue}</pre>}
     </div>
   );
 };
