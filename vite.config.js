@@ -9,6 +9,10 @@ export default defineConfig({
     alias: {
       "@": "/src",
     },
+    dedupe: ["@stellar/stellar-base"],
+  },
+  optimizeDeps: {
+    include: ["@stellar/stellar-base"],
   },
   server: {
     port: 3000,
