@@ -598,7 +598,10 @@ const Layout = () => {
         </div>
       </div>
 
-      <div className={`github-clone-overlay ${showGithubClone ? "visible" : ""}`}>
+      <div 
+        className={`github-clone-overlay ${showGithubClone ? "visible" : ""}`}
+        onClick={(e) => e.target === e.currentTarget && setShowGithubClone(false)}
+      >
         <div className="github-clone-dialog">
           <h3>Clone GitHub Repository</h3>
           <input
@@ -626,7 +629,10 @@ const Layout = () => {
 
       <CommandPalette isOpen={palette.isOpen} mode={palette.mode} commands={paletteCommands} files={paletteFiles} onClose={closePalette} onOpenFile={handlePaletteOpenFile} />
 
-      <div className={`github-clone-overlay ${confirmModal.isOpen ? "visible" : ""}`}>
+      <div 
+        className={`github-clone-overlay ${confirmModal.isOpen ? "visible" : ""}`}
+        onClick={(e) => e.target === e.currentTarget && setConfirmModal({ ...confirmModal, isOpen: false })}
+      >
         <div className="github-clone-dialog">
           <h3>{confirmModal.title}</h3>
           <p className="confirmation-message">{confirmModal.message}</p>
