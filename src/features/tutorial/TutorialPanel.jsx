@@ -75,7 +75,7 @@ const UI = {
       deploy: "Deploy ke Testnet",
     },
   },
-  vi: {
+  vn: {
     title: "Hướng dẫn & Tài liệu",
     back: "Quay lại",
     resources: "Tài nguyên chính thức",
@@ -99,7 +99,7 @@ const UI = {
       deploy: "Triển khai Testnet",
     },
   },
-  fil: {
+  ph: {
     title: "Gabay at Dokumento",
     back: "Bumalik",
     resources: "Opisyal na Resources",
