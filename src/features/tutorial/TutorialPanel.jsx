@@ -178,7 +178,12 @@ const SECTIONS = [
   { id: "variable", title: "Variabel & Tipe Data", category: "contract" },
   { id: "struct", title: "Struct", category: "contract" },
   { id: "function", title: "Contract Function", category: "contract" },
+  { id: "errors", title: "Error Handling", category: "contract" },
+  { id: "auth", title: "Authorization", category: "contract" },
+  { id: "events", title: "Events & Logs", category: "contract" },
+  { id: "crosscontract", title: "Cross-Contract Calls", category: "contract" },
   { id: "storage", title: "Storage", category: "data" },
+  { id: "increment", title: "Counter Example (Storage + TTL)", category: "data" },
   { id: "wallet", title: "Wallet", category: "network" },
   { id: "deploy", title: "Deploy to testnet", category: "network" },
 ];
@@ -313,7 +318,10 @@ const TutorialPanel = memo(() => {
   const renderSectionDetail = () => {
     if (!selectedSection) return null;
 
-    const content = tutorialData[lang]?.[selectedId];
+    // Fall back to EN content when a translation hasn't been written yet,
+    // so users never see a "coming soon" placeholder for a section that
+    // exists in at least one language.
+    const content = tutorialData[lang]?.[selectedId] || tutorialData.en?.[selectedId];
 
     const CodeHeader = ({ label, copyText }) => (
       <div className="tutorial-code-header">

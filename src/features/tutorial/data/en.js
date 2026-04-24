@@ -307,4 +307,369 @@ stellar keys ls`,
     ],
     note: "Any interaction that changes ledger data (Submit) requires a small XLM fee.",
   },
+  errors: {
+    title: "Error Handling in Smart Contracts",
+    intro: "Production contracts need to handle failure cleanly. Soroban lets you return typed errors that callers can inspect, instead of crashing with panic!.",
+    sections: [
+      {
+        sub: "panic! vs structured errors",
+        text: "You can bail out of any contract function with `panic!`, but callers only see a generic 'contract trapped' message. Structured errors via `#[contracterror]` expose a specific code the caller can match on.",
+      },
+      {
+        sub: "Defining a contract error enum",
+        text: "Declare an error type with `#[contracterror]`. Give each variant a `u32` code — these are stable identifiers encoded into the transaction result.",
+        code: `#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum Error {
+    NotFound = 1,
+    AlreadyExists = 2,
+    Unauthorized = 3,
+}`,
+        list: [
+          "**#[contracterror]:** Makes this enum usable as the error half of `Result<T, Error>`.",
+          "**#[repr(u32)]:** Error codes are always `u32`. Keep them stable — external clients may match on them.",
+          "**Derived traits:** Copy/Clone/Eq/Ord are required so Soroban can serialize and compare error values.",
+        ],
+      },
+      {
+        sub: "Returning Result from contract functions",
+        text: "Any function can return `Result<T, Error>` instead of `T`. Soroban surfaces the error code to the caller, along with any events emitted before the failure.",
+        code: `#[contractimpl]
+impl NotesContract {
+    pub fn get_note(env: Env, id: u64) -> Result<Note, Error> {
+        let notes: Vec<Note> = env.storage().instance()
+            .get(&NOTE_KEY)
+            .unwrap_or(Vec::new(&env));
+
+        notes.iter()
+            .find(|n| n.id == id)
+            .ok_or(Error::NotFound)
+    }
+}`,
+        list: [
+          "**ok_or:** Converts `Option<T>` into `Result<T, Error>` with a specific error variant.",
+          "**The ? operator:** Propagates errors up the call stack without boilerplate.",
+        ],
+      },
+      {
+        sub: "When to panic!",
+        text: "Reserve `panic!` for programmer errors that should never occur at runtime (e.g., 'state is corrupted'). For any condition a caller might legitimately trigger — missing data, unauthorized caller, bad input — return a typed error.",
+        code: `// Don't: callers get a generic trap with no context
+let amount: u32 = env.storage().instance().get(&KEY).unwrap();
+
+// Do: callers get Error::NotFound and can retry / show UI
+let amount: u32 = env.storage().instance()
+    .get(&KEY)
+    .ok_or(Error::NotFound)?;`,
+      },
+    ],
+    note: "Structured errors are the difference between a dApp that can show 'insufficient balance' to the user and one that just says 'transaction failed'.",
+    links: [
+      { label: "Errors — Stellar Docs", url: "https://developers.stellar.org/docs/build/smart-contracts/example-contracts/errors" },
+    ],
+  },
+  auth: {
+    title: "Authorization with require_auth",
+    intro: "Soroban contracts don't trust their callers by default. If a function should only succeed when a specific account has consented, call `require_auth` — and Soroban handles signature verification for you.",
+    sections: [
+      {
+        sub: "Why authorization is explicit",
+        text: "Unlike a web backend that knows who's logged in, a smart contract only knows which account invoked it — and that account might be acting on behalf of someone else. `require_auth` makes consent a first-class concept in your contract.",
+      },
+      {
+        sub: "The basic pattern: require_auth on an Address",
+        text: "Call `require_auth` on whichever `Address` must consent to the call. The network will refuse to run your function unless the signature is valid.",
+        code: `pub fn transfer(env: Env, from: Address, to: Address, amount: i128) {
+    from.require_auth();
+
+    // ...update balances
+}`,
+        list: [
+          "**from.require_auth():** The 'from' account must sign the transaction for this to succeed.",
+          "**No manual crypto:** Soroban verifies the signature automatically. You never touch private keys.",
+        ],
+      },
+      {
+        sub: "Scoping consent with require_auth_for_args",
+        text: "Sometimes you want to sign for 'any call to this function'; other times only for specific parameter values. Use `require_auth_for_args` when the signer is consenting to particular arguments, not arbitrary ones.",
+        code: `pub fn spend(env: Env, from: Address, amount: i128, memo: Symbol) {
+    // Signer approves spending exactly this amount with this memo.
+    from.require_auth_for_args((amount, memo).into_val(&env));
+
+    // ...transfer logic
+}`,
+      },
+      {
+        sub: "Testing auth with mock_all_auths",
+        text: "In unit tests you don't have real signers. Enable auto-approval so your tests can run any invocation without generating signatures.",
+        code: `#[test]
+fn test_transfer() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TokenContract, ());
+    let client = TokenContractClient::new(&env, &contract_id);
+
+    client.transfer(&alice, &bob, &100);
+}`,
+        list: [
+          "**mock_all_auths:** Treats every `require_auth` in the env as satisfied.",
+          "**mock_auths:** A stricter variant — only explicitly-listed (signer, function, args) tuples pass.",
+        ],
+      },
+    ],
+    note: "If a function touches anyone's balance, identity, or permissions — start with `require_auth`. It's the single most important line for contract safety.",
+    links: [
+      { label: "Authorization — Stellar Docs", url: "https://developers.stellar.org/docs/build/smart-contracts/example-contracts/auth" },
+    ],
+  },
+  events: {
+    title: "Events and Logs",
+    intro: "Contracts don't push data to the frontend directly — transactions only return a single result value. To broadcast rich updates (balance changed, note added, transfer happened), contracts emit events that indexers, wallets, and frontends subscribe to.",
+    sections: [
+      {
+        sub: "log! — for debugging",
+        text: "Use `log!` to trace values during simulation and tests. Log output is visible in `stellar contract invoke --verbose` and in test output.",
+        code: `let balance: i128 = env.storage().persistent()
+    .get(&from)
+    .unwrap_or(0);
+
+log!(&env, "balance for {}: {}", from, balance);`,
+      },
+      {
+        sub: "events().publish — for state changes",
+        text: "Events are your contract's public output stream. Each event has a `topics` tuple (for filtering) and a `data` payload.",
+        code: `env.events().publish(
+    (symbol_short!("note"), symbol_short!("created"), author.clone()),
+    note_id,
+);`,
+        list: [
+          "**Topics (1st arg):** Up to 4 values used by listeners to filter. Convention: `[resource, action, principal]`.",
+          "**Data (2nd arg):** The payload — any contract-serializable type (`Symbol`, `u64`, `Struct`, `Vec`, ...).",
+          "**Clone addresses:** Events take ownership of topic values; use `.clone()` if you still need them after publishing.",
+        ],
+      },
+      {
+        sub: "Pattern: write then emit",
+        text: "Emit an event after you've successfully mutated storage. If the mutation fails and the transaction reverts, the event is automatically dropped — listeners never see events for transactions that didn't commit.",
+        code: `pub fn create_note(env: Env, author: Address, content: String) -> u64 {
+    author.require_auth();
+
+    let mut notes: Vec<Note> = env.storage().instance()
+        .get(&NOTES_KEY)
+        .unwrap_or(Vec::new(&env));
+
+    let id = notes.len() as u64 + 1;
+    notes.push_back(Note { id, author: author.clone(), content });
+    env.storage().instance().set(&NOTES_KEY, &notes);
+
+    env.events().publish(
+        (symbol_short!("note"), symbol_short!("created")),
+        id,
+    );
+
+    id
+}`,
+      },
+      {
+        sub: "Consuming events from the frontend",
+        text: "Frontends use the Stellar RPC server's `getEvents` endpoint to subscribe. Filter by contract ID + topic to get just the events you care about.",
+        codeLang: "sh",
+        code: `stellar events \\
+  --start-ledger 100 \\
+  --contract-id CABCD... \\
+  --topic-filter note,created`,
+      },
+    ],
+    note: "Events are the bridge between contract state and user-facing UI. Design them the way you'd design REST endpoints: stable names, useful payloads.",
+    links: [
+      { label: "Events — Stellar Docs", url: "https://developers.stellar.org/docs/build/smart-contracts/example-contracts/events" },
+    ],
+  },
+  crosscontract: {
+    title: "Cross-Contract Calls",
+    intro: "Composability is a superpower of smart contracts: your contract can call another contract as if it were a local function. Soroban makes this ergonomic and type-safe.",
+    sections: [
+      {
+        sub: "Two ways to call another contract",
+        text: "You can either use a generated `Client` type (type-safe, recommended) or raw `env.invoke_contract` (for dynamic targets).",
+        list: [
+          "**Generated Client:** Compile-time checked, autocompletes in the IDE, reads like a normal function call.",
+          "**env.invoke_contract:** Useful when the target address is only known at runtime and you don't have the WASM at build time.",
+        ],
+      },
+      {
+        sub: "Calling with a generated client",
+        text: "When you have the target contract's WASM available, use `contractimport!` to generate a strongly-typed client.",
+        code: `mod token {
+    soroban_sdk::contractimport!(
+        file = "../token/target/wasm32-unknown-unknown/release/token.wasm",
+    );
+}
+
+#[contractimpl]
+impl SwapContract {
+    pub fn deposit(env: Env, token_id: Address, from: Address, amount: i128) {
+        from.require_auth();
+
+        let client = token::Client::new(&env, &token_id);
+        client.transfer(&from, &env.current_contract_address(), &amount);
+    }
+}`,
+        list: [
+          "**contractimport!:** Reads the target WASM at build time and generates a `Client` type matching its interface.",
+          "**token::Client::new:** Binds the client to a specific on-chain address within the current `Env`.",
+          "**Type safety:** `transfer`'s parameter types come from the token contract; you can't pass the wrong types.",
+        ],
+      },
+      {
+        sub: "Calling with env.invoke_contract",
+        text: "When you don't have the target WASM (dynamic routing, plugin pattern), call it raw. You must hand-encode the arguments and know the return type.",
+        code: `use soroban_sdk::IntoVal;
+
+let result: i128 = env.invoke_contract(
+    &token_id,
+    &symbol_short!("balance"),
+    (account,).into_val(&env),
+);`,
+        list: [
+          "**Target:** An `Address` of an already-deployed contract.",
+          "**Function name:** A `Symbol` identifying which function to call.",
+          "**Arguments:** A tuple converted into the contract `Val` representation with `into_val`.",
+        ],
+      },
+      {
+        sub: "Authorization across calls",
+        text: "When contract A calls contract B, B sees A as its caller — not the original user. If B needs the original user's signature (e.g. a token transfer), the user's `Address` must be passed through and re-auth'd. Soroban's auth framework supports this automatically via sub-authorizations.",
+      },
+    ],
+    note: "Prefer generated clients whenever possible — they move bugs from runtime to compile time.",
+    links: [
+      { label: "Cross-Contract Calls — Stellar Docs", url: "https://developers.stellar.org/docs/build/smart-contracts/example-contracts/cross-contract-call" },
+    ],
+  },
+  increment: {
+    title: "Example: Counter Contract (Storage + TTL)",
+    intro: "A complete walkthrough of a minimal counter contract. You'll see every piece of the storage lifecycle in one place: reading an entry with a default, writing it back, and extending its TTL so it doesn't get archived.",
+    sections: [
+      {
+        sub: "The full contract",
+        text: "This single file is a complete, deployable Soroban contract. It stores a `u32` counter under a `Symbol` key in Instance storage.",
+        code: `#![no_std]
+use soroban_sdk::{contract, contractimpl, log, symbol_short, Env, Symbol};
+
+const COUNTER: Symbol = symbol_short!("COUNTER");
+
+#[contract]
+pub struct IncrementContract;
+
+#[contractimpl]
+impl IncrementContract {
+    pub fn increment(env: Env) -> u32 {
+        let mut count: u32 = env.storage().instance()
+            .get(&COUNTER)
+            .unwrap_or(0);
+
+        log!(&env, "count: {}", count);
+
+        count += 1;
+        env.storage().instance().set(&COUNTER, &count);
+        env.storage().instance().extend_ttl(50, 100);
+
+        count
+    }
+}`,
+      },
+      {
+        sub: "Symbol keys with symbol_short!",
+        text: "Every storage entry is addressed by a key. For short, stable identifiers, use `symbol_short!` — it computes the `Symbol` at compile time with zero runtime cost.",
+        code: `const COUNTER: Symbol = symbol_short!("COUNTER");`,
+        list: [
+          "**Symbol:** A short string (up to 32 chars, `a-zA-Z0-9_` only). Cheap to store and compare.",
+          "**symbol_short!:** For symbols up to 9 characters — computed at compile time.",
+          "**Symbol::new(&env, \"name\"):** For longer symbols or those built at runtime.",
+        ],
+      },
+      {
+        sub: "Reading storage with a default",
+        text: "`get()` returns `Option<T>`. Pair it with `unwrap_or(default)` so the first call to the contract (before anything is stored) returns a sensible value instead of panicking.",
+        code: `let mut count: u32 = env.storage().instance()
+    .get(&COUNTER)
+    .unwrap_or(0);`,
+        list: [
+          "**storage().instance():** Instance storage — data tied to the contract's lifetime.",
+          "**unwrap_or(0):** First-time-access safety. Never assume keys exist.",
+          "**Type inference:** The target type (`u32`) tells Soroban how to decode the stored value.",
+        ],
+      },
+      {
+        sub: "Writing and extending TTL",
+        text: "Every storage entry on Soroban has a Time-To-Live. If its TTL expires, the entry is archived and must be restored (at a cost) before it can be read again. Call `extend_ttl` on every write to keep hot entries fresh.",
+        code: `env.storage().instance().set(&COUNTER, &count);
+env.storage().instance().extend_ttl(50, 100);`,
+        list: [
+          "**set(&key, &value):** Writes the new value, replacing any existing entry.",
+          "**extend_ttl(threshold, extend_to):** If remaining TTL is less than `threshold` ledgers, extend to `extend_to` ledgers. Testnet ledgers close every ~5s, so 100 ≈ 500 seconds.",
+          "**Three storage kinds:** Persistent (long-lived user data), Temporary (cheap, short-lived), Instance (lifetime of the contract itself).",
+        ],
+      },
+      {
+        sub: "log! for debugging",
+        text: "`log!` writes to the contract's diagnostic log — visible during simulation, in `invoke --verbose`, and in tests. It's free in production execution and doesn't count as an event.",
+        code: `log!(&env, "count: {}", count);`,
+      },
+      {
+        sub: "Writing a unit test",
+        text: "Soroban tests run in-memory with a mock `Env`. The generated `<Contract>Client` type gives you a typed, ergonomic way to call your functions.",
+        code: `#[test]
+fn test() {
+    let env = Env::default();
+    let contract_id = env.register(IncrementContract, ());
+    let client = IncrementContractClient::new(&env, &contract_id);
+
+    assert_eq!(client.increment(), 1);
+    assert_eq!(client.increment(), 2);
+    assert_eq!(client.increment(), 3);
+}`,
+        list: [
+          "**Env::default():** A fresh simulated Soroban environment — sandboxed, fast, no network.",
+          "**env.register:** Deploys the contract to the mock env. Returns its `Address`.",
+          "**<Contract>Client:** Auto-generated by `#[contractimpl]` — one method per `pub fn`.",
+        ],
+      },
+      {
+        sub: "Building, deploying, invoking",
+        text: "When you're ready to take the contract off your machine:",
+        codeLang: "sh",
+        code: `# 1. Compile to WASM
+stellar contract build
+
+# 2. Deploy to testnet
+stellar contract deploy \\
+  --wasm target/wasm32v1-none/release/soroban_increment_contract.wasm \\
+  --alias increment_example \\
+  --source-account alice \\
+  --network testnet
+
+# 3. Invoke the function
+stellar contract invoke \\
+  --id increment_example \\
+  --source-account alice \\
+  --network testnet \\
+  -- \\
+  increment`,
+        list: [
+          "**--alias:** Give the deployed contract a local nickname so future commands don't need the full ID.",
+          "**-- increment:** Everything before `--` are CLI flags; everything after is passed to the contract's function.",
+          "**First-time setup:** If `alice` is new, run `stellar keys generate alice --network testnet --fund` first.",
+        ],
+      },
+    ],
+    note: "This tiny contract touches every storage primitive you'll use in production: Symbol keys, Option-safe reads, writes, TTL management, logging, and tests.",
+    links: [
+      { label: "Source (soroban-examples)", url: "https://github.com/stellar/soroban-examples/tree/v23.0.0/increment" },
+      { label: "State Archival — Stellar Docs", url: "https://developers.stellar.org/docs/build/smart-contracts/example-contracts/state-archival" },
+    ],
+  },
 };
