@@ -83,7 +83,7 @@
 
 .ai-panel-header {
   height: var(--header-height);
-  padding: 0 20px;
+  padding: 0 16px 0 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -107,31 +107,11 @@
 .ai-panel-header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  height: 100%;
+  gap: 0;
 }
 
-.ai-header-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 4px;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.ai-header-btn:hover {
-  background: var(--hover-bg);
-  color: var(--text-primary);
-}
-
-.ai-header-btn.new-chat-btn:hover {
-  color: var(--accent);
-  background: rgba(255, 255, 255, 0.05);
-}
+/* Replaced by PanelActionButton */
 
 .ai-chat-messages {
   flex: 1;
@@ -354,26 +334,42 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
   height: 38px;
   width: 38px;
   border-radius: 50%;
-  border: none;
-  box-shadow: none;
-  background: transparent;
-  color: var(--text-secondary);
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
+  color: var(--accent);
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  margin-left: 8px;
-  opacity: 1;
-  transform: scale(1);
-  overflow: hidden;
+  margin-left: 12px;
+  position: relative;
+  overflow: visible;
+}
+
+.ai-toggle-btn svg {
+  animation: ai-sparkle-loop 3s infinite ease-in-out;
+}
+
+@keyframes ai-sparkle-loop {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+    filter: drop-shadow(0 0 0px var(--accent));
+  }
+  50% {
+    transform: scale(1.2) rotate(15deg);
+    filter: drop-shadow(0 0 8px var(--accent));
+  }
 }
 
 .ai-toggle-btn:hover:not(.hidden) {
-  background: var(--hover-bg);
-  border-color: var(--text-muted);
-  color: var(--text-primary);
+  background: rgba(var(--accent-rgb), 0.4);
+  border-color: var(--accent);
+  box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.5);
+}
+
+.ai-toggle-btn:hover:not(.hidden) svg {
+  color: #ffffff;
 }
 
 .ai-toggle-btn.hidden {
