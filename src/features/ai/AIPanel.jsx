@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, memo, useMemo, useLayoutEffect } from "react";
 import { Sparkle, X, ArrowUp, User, Robot, ChatCircle, Plus, Copy, Check, ArrowDown } from "@phosphor-icons/react";
+import PanelActionButton from "../../components/common/PanelActionButton";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -284,12 +285,8 @@ const AIPanel = ({ isOpen, onClose }) => {
             <span>Soroban AI</span>
           </div>
           <div className="ai-panel-header-actions">
-            <button className="ai-header-btn new-chat-btn" onClick={clearChat} title="New Chat">
-              <Plus size={18} />
-            </button>
-            <button className="ai-header-btn close-btn" onClick={onClose} title="Close Panel">
-              <X size={18} />
-            </button>
+            <PanelActionButton icon={Plus} onClick={clearChat} title="New Chat" />
+            <PanelActionButton icon={X} onClick={onClose} title="Close Panel" />
           </div>
         </div>
 
