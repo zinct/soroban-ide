@@ -10,11 +10,11 @@ const MIN_WIDTH = 260;
 const MAX_WIDTH = 1200;
 const COLLAPSE_THRESHOLD = 120;
 const PANEL_WIDTHS = {
-  explorer: 400,
-  github: 450,
-  tutorial: 620,
-  deploy: 500,
-  validation: 500,
+  explorer: 300,
+  github: 400,
+  tutorial: 520,
+  deploy: 400,
+  validation: 400,
 };
 import { Gear, BookOpen, Rocket, CheckCircle } from "@phosphor-icons/react";
 import TutorialPanel from "../tutorial/TutorialPanel";

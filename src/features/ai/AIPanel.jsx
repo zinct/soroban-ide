@@ -7,7 +7,7 @@ import remarkGfm from "remark-gfm";
 import "../../styles/ai.css";
 import { streamChatWithAI } from "../../services/ai";
 
-const MIN_WIDTH = 300;
+const MIN_WIDTH = 260;
 const MAX_WIDTH = 800;
 const COLLAPSE_THRESHOLD = 200;
 
@@ -68,7 +68,7 @@ const AIMessage = memo(({ text, sender }) => {
 const AIPanel = ({ isOpen, onClose }) => {
   const [width, setWidth] = useState(() => {
     const saved = localStorage.getItem("ai_panel_width_v2");
-    return saved ? parseInt(saved, 10) : 400;
+    return saved ? parseInt(saved, 10) : 350;
   });
   const [isResizing, setIsResizing] = useState(false);
   const [isMultiline, setIsMultiline] = useState(false);

@@ -46,7 +46,7 @@
   --sidebar-resize-handle: #27272a;
 
   /* UI Dimensions */
-  --header-height: 60px;
+  --header-height: 48px;
 
   /* Font Sizes */
   --font-size-xs: 13px;
@@ -221,6 +221,6 @@ body {
   flex-direction: column;
   background: var(--editor-bg);
   padding-top: 12px;
-  padding-bottom: 56px; /* Space for floating terminal header */
+  padding-bottom: 44px; /* Space for floating terminal header */
   overflow: hidden;
 }

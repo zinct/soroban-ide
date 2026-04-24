@@ -254,8 +254,8 @@
   outline: none;
   background: transparent;
   color: var(--text-primary);
-  height: 38px;
-  padding: 0 20px;
+  height: 32px;
+  padding: 0 16px;
   border-radius: 9999px;
   cursor: pointer;
   font-size: 14px;
