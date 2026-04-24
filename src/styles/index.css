@@ -221,6 +221,7 @@ body {
   flex-direction: column;
   background: var(--editor-bg);
   padding-top: 12px;
-  padding-bottom: 44px; /* Space for floating terminal header */
+  margin-bottom: var(--terminal-current-height, 44px);
+  transition: margin-bottom 0.4s cubic-bezier(0.22, 1, 0.36, 1);
   overflow: hidden;
 }
