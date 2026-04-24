@@ -1,13 +1,19 @@
 import React, { memo, useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { Plus, X, Terminal as TerminalIcon } from "@phosphor-icons/react";
+import { Plus, X, Trash, Terminal as TerminalIcon } from "@phosphor-icons/react";
 import { loadState, saveStateSection } from "../../utils/storage";
 import { executeTerminalCommand, isBackendCommand } from "./terminalCommands";
 import { collectProjectFiles, submitCommand, connectBuildStream, killCommand, getPreviewUrl } from "../../services/backendService";
 
-const MIN_HEIGHT = 48;
+const MIN_HEIGHT = 44;
 const COLLAPSE_THRESHOLD = 60;
 const DEFAULT_HEIGHT = 350;
 const MAX_HEIGHT = 600;
+
+const SESSION_NAMES = ["matcha-latte", "caramel-macchiato", "vanilla-frappe", "ice-americano", "espresso-shot", "hazelnut-latte", "thai-tea", "peach-oolong", "berry-smoothie", "taro-milk", "brown-sugar", "red-velvet", "cookies-cream", "oat-milk-latte", "choco-mint", "lemon-squash", "avocado-coffee", "butterfly-pea", "matcha-espresso"];
+
+const getRandomSessionName = () => {
+  return SESSION_NAMES[Math.floor(Math.random() * SESSION_NAMES.length)];
+};
 
 /**
  * Helper to create a new terminal instance
@@ -25,7 +31,7 @@ const createTerminalInstance = (id, name = "bash", cwd = "~/project") => ({
   commandHistory: [],
   historyIndex: -1,
   activeJobId: null,
-  lastSessionId: null
+  lastSessionId: null,
 });
 
 /**
@@ -37,22 +43,33 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
   const [height, setHeight] = useState(() => persistedState?.height || DEFAULT_HEIGHT);
   const [isCollapsed, setIsCollapsed] = useState(() => persistedState?.isCollapsed ?? true);
   const [isDragging, setIsDragging] = useState(false);
-  
+
   // Sidebar resizing state
   const [sidebarWidth, setSidebarWidth] = useState(() => persistedState?.sidebarWidth || 240);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
-  
+  const [isHoveringSidebar, setIsHoveringSidebar] = useState(false);
   // Multi-terminal state
   const [terminals, setTerminals] = useState(() => {
     if (persistedState?.terminals?.length > 0) {
-      return persistedState.terminals.map(t => ({
+      return persistedState.terminals.map((t) => ({
         ...t,
         isRunning: false, // Don't persist running state
-        wsCleanup: null
+        wsCleanup: null,
       }));
     }
-    return [createTerminalInstance("default", "Terminal 1", currentDirectory)];
+    return [createTerminalInstance("default", getRandomSessionName(), currentDirectory)];
   });
+
+  const [wasMultiple, setWasMultiple] = useState(false);
+
+  // Track if we should keep the sidebar open (sticky UX)
+  useEffect(() => {
+    if (terminals.length > 1) {
+      setWasMultiple(true);
+    } else if (!isHoveringSidebar) {
+      setWasMultiple(false);
+    }
+  }, [terminals.length, isHoveringSidebar]);
   const [activeTerminalId, setActiveTerminalId] = useState(() => persistedState?.activeTerminalId || "default");
 
   const terminalRef = useRef(null);
@@ -63,27 +80,27 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
   const dragStartWidth = useRef(0);
   const windowEndRef = useRef(null);
   const previousHeight = useRef(DEFAULT_HEIGHT);
-  
+
   const wsCleanupsRef = useRef({});
 
-  const activeTerminal = terminals.find(t => t.id === activeTerminalId) || terminals[0];
-  const showSidebar = !isCollapsed && terminals.length > 1;
+  const activeTerminal = terminals.find((t) => t.id === activeTerminalId) || terminals[0];
+  const showSidebar = !isCollapsed && (terminals.length > 1 || (wasMultiple && isHoveringSidebar));
 
   // Persistence
   useEffect(() => {
-    saveStateSection("terminal", { 
-      height, 
-      isCollapsed, 
+    saveStateSection("terminal", {
+      height,
+      isCollapsed,
       sidebarWidth,
       terminals: terminals.map(({ wsCleanup, ...rest }) => rest),
-      activeTerminalId 
+      activeTerminalId,
     });
   }, [height, isCollapsed, sidebarWidth, terminals, activeTerminalId]);
 
   // Cleanup all WebSockets on unmount
   useEffect(() => {
     return () => {
-      Object.values(wsCleanupsRef.current).forEach(cleanup => cleanup && cleanup());
+      Object.values(wsCleanupsRef.current).forEach((cleanup) => cleanup && cleanup());
     };
   }, []);
 
@@ -111,41 +128,52 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
   }, []);
 
   const updateTerminal = useCallback((id, updates) => {
-    setTerminals(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    setTerminals((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
   }, []);
 
-  const addTerminal = useCallback((e) => {
-    if (e) e.stopPropagation();
-    const id = `term-${Date.now()}`;
-    const newTerm = createTerminalInstance(id, `Terminal ${terminals.length + 1}`, currentDirectory);
-    setTerminals(prev => [...prev, newTerm]);
-    setActiveTerminalId(id);
-    if (isCollapsed) {
-      setIsCollapsed(false);
-      setHeight(previousHeight.current || DEFAULT_HEIGHT);
-    }
-    setTimeout(() => inputRef.current?.focus(), 100);
-  }, [terminals.length, currentDirectory, isCollapsed]);
+  const addTerminal = useCallback(
+    (e) => {
+      if (e) e.stopPropagation();
+      const id = `term-${Date.now()}`;
+      const newTerm = createTerminalInstance(id, getRandomSessionName(), currentDirectory);
+      setTerminals((prev) => [...prev, newTerm]);
+      setActiveTerminalId(id);
+      if (isCollapsed) {
+        setIsCollapsed(false);
+        setHeight(previousHeight.current || DEFAULT_HEIGHT);
+      }
+      setTimeout(() => inputRef.current?.focus(), 100);
+    },
+    [terminals.length, currentDirectory, isCollapsed],
+  );
 
-  const closeTerminal = useCallback((e, id) => {
-    e.stopPropagation();
-    if (terminals.length === 1) return;
+  const closeTerminal = useCallback(
+    (e, id) => {
+      e.stopPropagation();
+      if (terminals.length === 1) {
+        previousHeight.current = height;
+        setIsCollapsed(true);
+        setHeight(MIN_HEIGHT);
+        return;
+      }
 
-    const term = terminals.find(t => t.id === id);
-    if (term.isRunning && term.activeJobId && term.lastSessionId) {
-      killCommand(term.lastSessionId, term.activeJobId);
-    }
-    if (wsCleanupsRef.current[id]) {
-      wsCleanupsRef.current[id]();
-      delete wsCleanupsRef.current[id];
-    }
+      const term = terminals.find((t) => t.id === id);
+      if (term.isRunning && term.activeJobId && term.lastSessionId) {
+        killCommand(term.lastSessionId, term.activeJobId);
+      }
+      if (wsCleanupsRef.current[id]) {
+        wsCleanupsRef.current[id]();
+        delete wsCleanupsRef.current[id];
+      }
 
-    const newTerminals = terminals.filter(t => t.id !== id);
-    setTerminals(newTerminals);
-    if (activeTerminalId === id) {
-      setActiveTerminalId(newTerminals[newTerminals.length - 1].id);
-    }
-  }, [terminals, activeTerminalId]);
+      const newTerminals = terminals.filter((t) => t.id !== id);
+      setTerminals(newTerminals);
+      if (activeTerminalId === id) {
+        setActiveTerminalId(newTerminals[newTerminals.length - 1].id);
+      }
+    },
+    [terminals, activeTerminalId],
+  );
 
   /* ─── Backend command execution ─── */
 
@@ -155,7 +183,7 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
 
       try {
         const files = collectProjectFiles(treeData || [], fileContents || {});
-        const targetTerm = terminals.find(t => t.id === termId);
+        const targetTerm = terminals.find((t) => t.id === termId);
         const { sessionId, jobId } = await submitCommand(files, cmd, targetTerm.cwd);
         updateTerminal(termId, { activeJobId: jobId, lastSessionId: sessionId });
 
@@ -182,10 +210,10 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
             }
 
             const className = msg.type === "error" ? "error" : msg.type === "info" ? "info" : "output";
-            setTerminals(prev => prev.map(t => t.id === termId ? { ...t, history: [...t.history, { type: className, content }] } : t));
+            setTerminals((prev) => prev.map((t) => (t.id === termId ? { ...t, history: [...t.history, { type: className, content }] } : t)));
           },
           onError: (errorMsg) => {
-            setTerminals(prev => prev.map(t => t.id === termId ? { ...t, isRunning: false, history: [...t.history, { type: "error", content: `❌ ${errorMsg}` }] } : t));
+            setTerminals((prev) => prev.map((t) => (t.id === termId ? { ...t, isRunning: false, history: [...t.history, { type: "error", content: `❌ ${errorMsg}` }] } : t)));
             wsCleanupsRef.current[termId] = null;
           },
           onDone: () => {
@@ -194,10 +222,10 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
           },
         });
       } catch (err) {
-        setTerminals(prev => prev.map(t => t.id === termId ? { ...t, isRunning: false, history: [...t.history, { type: "error", content: `❌ ${err.message || "Failed to connect to build server"}` }] } : t));
+        setTerminals((prev) => prev.map((t) => (t.id === termId ? { ...t, isRunning: false, history: [...t.history, { type: "error", content: `❌ ${err.message || "Failed to connect to build server"}` }] } : t)));
       }
     },
-    [treeData, fileContents, terminals, updateTerminal, onFileTreeUpdate]
+    [treeData, fileContents, terminals, updateTerminal, onFileTreeUpdate],
   );
 
   /* ─── Command execution ─── */
@@ -210,12 +238,12 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
 
       const updatedHistory = [...activeTerminal.history, { type: "command", content: trimmedCmd, cwd: getShortPath(activeTerminal.cwd) }];
       const updatedCommandHistory = [...activeTerminal.commandHistory, trimmedCmd];
-      
-      updateTerminal(activeTerminalId, { 
-        history: updatedHistory, 
+
+      updateTerminal(activeTerminalId, {
+        history: updatedHistory,
         commandHistory: updatedCommandHistory,
         historyIndex: -1,
-        input: ""
+        input: "",
       });
 
       if (isBackendCommand(trimmedCmd)) {
@@ -225,11 +253,11 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
         if (output === null) {
           updateTerminal(activeTerminalId, { history: [] });
         } else if (output) {
-          setTerminals(prev => prev.map(t => t.id === activeTerminalId ? { ...t, history: [...t.history, { type: "output", content: output }] } : t));
+          setTerminals((prev) => prev.map((t) => (t.id === activeTerminalId ? { ...t, history: [...t.history, { type: "output", content: output }] } : t)));
         }
       }
     },
-    [activeTerminal, activeTerminalId, getShortPath, executeBackendCommand, treeData, updateTerminal]
+    [activeTerminal, activeTerminalId, getShortPath, executeBackendCommand, treeData, updateTerminal],
   );
 
   /* ─── Keyboard handling ─── */
@@ -244,9 +272,9 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
         if (activeTerminal.commandHistory.length > 0) {
           const newIndex = activeTerminal.historyIndex + 1;
           if (newIndex < activeTerminal.commandHistory.length) {
-            updateTerminal(activeTerminalId, { 
-              historyIndex: newIndex, 
-              input: activeTerminal.commandHistory[activeTerminal.commandHistory.length - 1 - newIndex] 
+            updateTerminal(activeTerminalId, {
+              historyIndex: newIndex,
+              input: activeTerminal.commandHistory[activeTerminal.commandHistory.length - 1 - newIndex],
             });
           }
         }
@@ -254,9 +282,9 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
         e.preventDefault();
         if (activeTerminal.historyIndex > 0) {
           const newIndex = activeTerminal.historyIndex - 1;
-          updateTerminal(activeTerminalId, { 
-            historyIndex: newIndex, 
-            input: activeTerminal.commandHistory[activeTerminal.commandHistory.length - 1 - newIndex] 
+          updateTerminal(activeTerminalId, {
+            historyIndex: newIndex,
+            input: activeTerminal.commandHistory[activeTerminal.commandHistory.length - 1 - newIndex],
           });
         } else if (activeTerminal.historyIndex === 0) {
           updateTerminal(activeTerminalId, { historyIndex: -1, input: "" });
@@ -276,56 +304,65 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
               wsCleanupsRef.current[activeTerminalId]();
               wsCleanupsRef.current[activeTerminalId] = null;
             }
-            updateTerminal(activeTerminalId, { 
-              isRunning: false, 
-              history: [...activeTerminal.history, { type: "error", content: "^C — cancelled" }] 
+            updateTerminal(activeTerminalId, {
+              isRunning: false,
+              history: [...activeTerminal.history, { type: "error", content: "^C — cancelled" }],
             });
           } else {
-            updateTerminal(activeTerminalId, { 
+            updateTerminal(activeTerminalId, {
               input: "",
-              history: [...activeTerminal.history, { type: "command", content: activeTerminal.input + "^C", cwd: getShortPath(activeTerminal.cwd) }]
+              history: [...activeTerminal.history, { type: "command", content: activeTerminal.input + "^C", cwd: getShortPath(activeTerminal.cwd) }],
             });
           }
         }
       }
     },
-    [activeTerminal, activeTerminalId, handleExecute, getShortPath, updateTerminal]
+    [activeTerminal, activeTerminalId, handleExecute, getShortPath, updateTerminal],
   );
 
   /* ─── Resize handlers ─── */
 
-  const handleMouseDown = useCallback((e) => {
-    e.preventDefault();
-    setIsDragging(true);
-    dragStartY.current = e.clientY;
-    dragStartHeight.current = height;
-  }, [height]);
+  const handleMouseDown = useCallback(
+    (e) => {
+      e.preventDefault();
+      setIsDragging(true);
+      dragStartY.current = e.clientY;
+      dragStartHeight.current = height;
+    },
+    [height],
+  );
 
-  const handleSidebarResizeStart = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsResizingSidebar(true);
-    dragStartX.current = e.clientX;
-    dragStartWidth.current = sidebarWidth;
-  }, [sidebarWidth]);
+  const handleSidebarResizeStart = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsResizingSidebar(true);
+      dragStartX.current = e.clientX;
+      dragStartWidth.current = sidebarWidth;
+    },
+    [sidebarWidth],
+  );
 
-  const handleMouseMove = useCallback((e) => {
-    if (isDragging) {
-      const delta = dragStartY.current - e.clientY;
-      const newHeight = dragStartHeight.current + delta;
-      if (newHeight < COLLAPSE_THRESHOLD) {
-        setIsCollapsed(true);
-        setHeight(MIN_HEIGHT);
-      } else {
-        setIsCollapsed(false);
-        setHeight(Math.max(MIN_HEIGHT + 10, Math.min(MAX_HEIGHT, newHeight)));
+  const handleMouseMove = useCallback(
+    (e) => {
+      if (isDragging) {
+        const delta = dragStartY.current - e.clientY;
+        const newHeight = dragStartHeight.current + delta;
+        if (newHeight < COLLAPSE_THRESHOLD) {
+          setIsCollapsed(true);
+          setHeight(MIN_HEIGHT);
+        } else {
+          setIsCollapsed(false);
+          setHeight(Math.max(MIN_HEIGHT + 10, Math.min(MAX_HEIGHT, newHeight)));
+        }
+      } else if (isResizingSidebar) {
+        const delta = dragStartX.current - e.clientX;
+        const newWidth = dragStartWidth.current + delta;
+        setSidebarWidth(Math.max(160, Math.min(500, newWidth)));
       }
-    } else if (isResizingSidebar) {
-      const delta = dragStartX.current - e.clientX;
-      const newWidth = dragStartWidth.current + delta;
-      setSidebarWidth(Math.max(160, Math.min(500, newWidth)));
-    }
-  }, [isDragging, isResizingSidebar]);
+    },
+    [isDragging, isResizingSidebar],
+  );
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
@@ -381,7 +418,7 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
     const handleRunCommand = (e) => {
       const { cmd } = e.detail || {};
       if (!cmd) return;
-      
+
       if (isCollapsed) {
         setIsCollapsed(false);
         setHeight(previousHeight.current || DEFAULT_HEIGHT);
@@ -392,24 +429,30 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
     const handleAppend = (e) => {
       const { type, content, cwd: entryCwd } = e.detail || {};
       if (!content) return;
-      
+
       if (isCollapsed) {
         setIsCollapsed(false);
         setHeight(previousHeight.current || DEFAULT_HEIGHT);
       }
-      
+
       const className = type === "error" ? "error" : type === "command" ? "command" : "output";
-      setTerminals(prev => prev.map(t => t.id === activeTerminalId ? { 
-        ...t, 
-        history: [...t.history, { type: className, content, cwd: entryCwd || getShortPath(t.cwd) }] 
-      } : t));
+      setTerminals((prev) =>
+        prev.map((t) =>
+          t.id === activeTerminalId
+            ? {
+                ...t,
+                history: [...t.history, { type: className, content, cwd: entryCwd || getShortPath(t.cwd) }],
+              }
+            : t,
+        ),
+      );
     };
 
     window.addEventListener("soroban:toggleTerminal", handleToggle);
     window.addEventListener("soroban:clearTerminal", handleClear);
     window.addEventListener("soroban:runCommand", handleRunCommand);
     window.addEventListener("soroban:terminalAppend", handleAppend);
-    
+
     return () => {
       window.removeEventListener("soroban:toggleTerminal", handleToggle);
       window.removeEventListener("soroban:clearTerminal", handleClear);
@@ -427,9 +470,15 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
     if (typeof content !== "string") return content;
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const parts = content.split(urlRegex);
-    return parts.map((part, i) => part.match(urlRegex) ? (
-      <a key={i} href={part} className="terminal-link" target="_blank" rel="noopener noreferrer">{part}</a>
-    ) : part);
+    return parts.map((part, i) =>
+      part.match(urlRegex) ? (
+        <a key={i} href={part} className="terminal-link" target="_blank" rel="noopener noreferrer">
+          {part}
+        </a>
+      ) : (
+        part
+      ),
+    );
   };
 
   const getLineClassName = (entry) => {
@@ -440,23 +489,18 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
   };
 
   return (
-    <div ref={terminalRef} 
-         className={`terminal ${isCollapsed ? "collapsed" : ""} ${isDragging ? "" : "animate"}`} 
-         style={{ height: isCollapsed ? MIN_HEIGHT : height }} 
-         onClick={handleTerminalClick}>
-      
+    <div ref={terminalRef} className={`terminal ${isCollapsed ? "collapsed" : ""} ${isDragging ? "" : "animate"}`} style={{ height: isCollapsed ? MIN_HEIGHT : height }} onClick={handleTerminalClick}>
       <div className={`terminal-resize-handle ${isDragging ? "dragging" : ""}`} onMouseDown={handleMouseDown} />
 
       <div className="terminal-header">
         <button className="terminal-title-btn" onClick={toggleCollapse} title={isCollapsed ? "Expand" : "Minimize"}>
-          <TerminalIcon size={14} className="terminal-title-icon" />
           <span className="terminal-title">Terminal</span>
           {activeTerminal.isRunning && <span className="terminal-running-badge">Running</span>}
         </button>
         {!isCollapsed && (
           <div className="terminal-header-actions">
             <button className="terminal-header-add-btn" onClick={addTerminal} title="New Terminal">
-              <Plus size={14} />
+              <Plus size={18} weight="bold" />
             </button>
           </div>
         )}
@@ -497,47 +541,42 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
                   <span className="terminal-dots"></span>
                 </div>
               )}
-              <input 
-                ref={inputRef} 
-                type="text" 
-                className="terminal-input" 
-                value={activeTerminal.isRunning ? "" : activeTerminal.input} 
-                onChange={(e) => updateTerminal(activeTerminalId, { input: e.target.value })} 
-                onKeyDown={handleKeyDown} 
-                spellCheck="false" 
-                autoComplete="off" 
-                autoFocus 
-                readOnly={activeTerminal.isRunning} 
-                placeholder={activeTerminal.isRunning ? "Press Ctrl+C to cancel..." : ""} 
-              />
+              <input ref={inputRef} type="text" className="terminal-input" value={activeTerminal.isRunning ? "" : activeTerminal.input} onChange={(e) => updateTerminal(activeTerminalId, { input: e.target.value })} onKeyDown={handleKeyDown} spellCheck="false" autoComplete="off" autoFocus readOnly={activeTerminal.isRunning} placeholder={activeTerminal.isRunning ? "Press Ctrl+C to cancel..." : ""} />
             </div>
             <div ref={windowEndRef} />
           </div>
         </div>
 
-        {showSidebar && (
-          <div className="terminal-sidebar" style={{ width: sidebarWidth }}>
-            <div className="terminal-sidebar-resize-handle" onMouseDown={handleSidebarResizeStart} />
-            <div className="terminal-sidebar-header">
-              <span className="terminal-sidebar-title">Sessions</span>
-            </div>
-            <div className="terminal-tabs-list">
-              {terminals.map(term => (
-                <div key={term.id} 
-                     className={`terminal-tab ${term.id === activeTerminalId ? "active" : ""}`}
-                     onClick={() => setActiveTerminalId(term.id)}>
-                  <div className={`terminal-tab-status ${term.isRunning ? "running" : ""}`} />
+        <div
+          className={`terminal-sidebar ${!showSidebar ? "hidden" : ""}`}
+          style={{
+            width: showSidebar ? sidebarWidth : 0,
+            opacity: showSidebar ? 1 : 0,
+            pointerEvents: showSidebar ? "auto" : "none",
+          }}
+          onMouseEnter={() => setIsHoveringSidebar(true)}
+          onMouseLeave={() => setIsHoveringSidebar(false)}
+        >
+          <div className="terminal-sidebar-resize-handle" onMouseDown={handleSidebarResizeStart} />
+
+          <div className="terminal-tabs-list">
+            {terminals.map((term) => (
+              <div key={term.id} className={`terminal-tab ${term.id === activeTerminalId ? "active" : ""}`} onClick={() => setActiveTerminalId(term.id)}>
+                <div className={`terminal-tab-status ${term.isRunning ? "running" : ""}`} />
+                <div className="terminal-tab-name-container">
+                  <TerminalIcon size={14} className="terminal-tab-icon" />
+                  <span className="terminal-tab-shell">zsh</span>
                   <span className="terminal-tab-name">{term.name}</span>
-                  {terminals.length > 1 && (
-                    <button className="terminal-tab-close" onClick={(e) => closeTerminal(e, term.id)}>
-                      <X size={12} />
-                    </button>
-                  )}
                 </div>
-              ))}
-            </div>
+                {(terminals.length > 1 || wasMultiple) && (
+                  <button className="terminal-tab-close" onClick={(e) => closeTerminal(e, term.id)}>
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
