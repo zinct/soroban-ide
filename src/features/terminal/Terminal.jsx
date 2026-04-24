@@ -1,5 +1,5 @@
 import React, { memo, useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { Plus, X, Trash, Terminal as TerminalIcon } from "@phosphor-icons/react";
+import { Plus, X, Trash, Terminal as TerminalIcon, CornersOut, CornersIn } from "@phosphor-icons/react";
 import { loadState, saveStateSection } from "../../utils/storage";
 import { executeTerminalCommand, isBackendCommand } from "./terminalCommands";
 import { collectProjectFiles, submitCommand, connectBuildStream, killCommand, getPreviewUrl } from "../../services/backendService";
@@ -42,6 +42,7 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
 
   const [height, setHeight] = useState(() => persistedState?.height || DEFAULT_HEIGHT);
   const [isCollapsed, setIsCollapsed] = useState(() => persistedState?.isCollapsed ?? true);
+  const [isMaximized, setIsMaximized] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
   // Sidebar resizing state
@@ -146,6 +147,30 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
     },
     [terminals.length, currentDirectory, isCollapsed],
   );
+
+  // Sync height to CSS variable for smooth layout transitions
+  useEffect(() => {
+    const root = document.documentElement;
+    const h = isCollapsed ? MIN_HEIGHT : (isMaximized ? 0 : height);
+    root.style.setProperty("--terminal-current-height", `${h}px`);
+  }, [height, isCollapsed, isMaximized]);
+
+  const toggleMaximize = useCallback((e) => {
+    if (e) e.stopPropagation();
+    setIsMaximized(prev => !prev);
+    if (isCollapsed) {
+      setIsCollapsed(false);
+      setHeight(previousHeight.current || DEFAULT_HEIGHT);
+    }
+  }, [isCollapsed]);
+
+  const handleHeaderMinimize = useCallback((e) => {
+    if (e) e.stopPropagation();
+    setIsMaximized(false);
+    setIsCollapsed(true);
+    previousHeight.current = height;
+    setHeight(MIN_HEIGHT);
+  }, [height]);
 
   const closeTerminal = useCallback(
     (e, id) => {
@@ -489,18 +514,24 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
   };
 
   return (
-    <div ref={terminalRef} className={`terminal ${isCollapsed ? "collapsed" : ""} ${isDragging ? "" : "animate"}`} style={{ height: isCollapsed ? MIN_HEIGHT : height }} onClick={handleTerminalClick}>
-      <div className={`terminal-resize-handle ${isDragging ? "dragging" : ""}`} onMouseDown={handleMouseDown} />
+    <div ref={terminalRef} className={`terminal ${isCollapsed ? "collapsed" : ""} ${isMaximized ? "maximized" : ""} ${isDragging ? "" : "animate"}`} style={isMaximized ? undefined : { height: isCollapsed ? MIN_HEIGHT : height }} onClick={handleTerminalClick}>
+      <div className={`terminal-resize-handle ${isDragging ? "dragging" : ""} ${isMaximized ? "hidden" : ""}`} onMouseDown={handleMouseDown} />
 
       <div className="terminal-header">
-        <button className="terminal-title-btn" onClick={toggleCollapse} title={isCollapsed ? "Expand" : "Minimize"}>
+        <div className="terminal-title-btn" onClick={isCollapsed ? toggleCollapse : undefined} style={{ cursor: isCollapsed ? "pointer" : "default" }}>
           <span className="terminal-title">Terminal</span>
           {activeTerminal.isRunning && <span className="terminal-running-badge">Running</span>}
-        </button>
+        </div>
         {!isCollapsed && (
           <div className="terminal-header-actions">
-            <button className="terminal-header-add-btn" onClick={addTerminal} title="New Terminal">
+            <button className="terminal-header-action-btn" onClick={addTerminal} title="New Terminal">
               <Plus size={18} weight="bold" />
+            </button>
+            <button className="terminal-header-action-btn" onClick={toggleMaximize} title={isMaximized ? "Restore" : "Maximize"}>
+              {isMaximized ? <CornersIn size={18} weight="bold" /> : <CornersOut size={18} weight="bold" />}
+            </button>
+            <button className="terminal-header-action-btn" onClick={handleHeaderMinimize} title="Minimize">
+              <X size={18} weight="bold" />
             </button>
           </div>
         )}
