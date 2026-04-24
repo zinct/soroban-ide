@@ -6,17 +6,23 @@
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  position: relative;
+  position: absolute !important;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
   overflow: hidden;
+  z-index: 100;
 }
 
 .terminal.animate {
-  transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    height 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.3s ease;
 }
 
 .terminal.collapsed {
   height: 44px; /* MIN_HEIGHT sync with JS and header height */
-  flex: 0 0 auto;
   background: transparent;
   border-top: none;
   pointer-events: auto;
@@ -36,8 +42,18 @@
 }
 
 .terminal.maximized {
-  min-height: 0;
+  height: 100% !important;
+  border-top: 1px solid var(--border-color);
+  background: var(--main-bg);
+  will-change: height;
+}
+
+.terminal.maximized .terminal-window {
   flex: 1;
+}
+
+.terminal-resize-handle.hidden {
+  display: none;
 }
 
 /* ─── Resize Handle ─── */
@@ -67,15 +83,19 @@
   padding: 0;
   height: 44px;
   border-top: 1px solid var(--border-color);
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: none;
   pointer-events: auto;
-  background: rgba(var(--main-bg-rgb), 0.6);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: var(--term-win-bg);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   z-index: 10;
   position: relative;
-  transition: border-color 0.2s ease;
+  transition: all 0.2s ease;
+}
+
+.terminal.collapsed .terminal-header {
+  background: rgba(30, 30, 33, 0.85);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 
 
@@ -84,9 +104,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: transparent;
   border: none;
-  border-right: 1px solid var(--border-color);
+  border-right: none;
   color: var(--text-primary);
   cursor: pointer;
   padding: 0 24px;
@@ -99,9 +118,7 @@
   z-index: 2;
 }
 
-.terminal-title-btn:hover {
-  background: var(--hover-bg);
-}
+/* Removed hover effect as requested */
 
 .terminal-title {
   font-weight: 600;
@@ -117,31 +134,30 @@
 .terminal-header-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  height: 100%;
   position: absolute;
-  right: 12px;
+  right: 0;
   z-index: 10;
+  padding-right: 8px;
 }
 
-.terminal-header-add-btn {
+.terminal-header-action-btn {
   background: transparent;
-  border: 1px solid transparent;
-  color: #ffffff;
+  border: none;
+  border-left: none;
+  color: var(--text-primary);
   cursor: pointer;
-  padding: 6px;
-  border-radius: 6px;
-  width: 32px;
-  height: 32px;
+  padding: 0;
+  width: 44px;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.15s ease;
 }
 
-.terminal-header-add-btn:hover {
-  background: transparent;
-  border-color: transparent;
-  color: #ffffff;
+.terminal-header-action-btn:hover {
+  background: var(--hover-bg);
 }
 
 .terminal.collapsed .terminal-window {
@@ -168,6 +184,7 @@
   color: var(--term-fg);
   overscroll-behavior: none;
   user-select: text;
+  cursor: text;
 }
 
 .terminal-sidebar {
