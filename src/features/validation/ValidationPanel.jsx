@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { ShieldCheck, ShieldX, AlertTriangle, CheckCircle, XCircle, Loader, ChevronDown, ChevronRight } from "lucide-react";
+import { ShieldCheck, ShieldWarning, Warning, CheckCircle, XCircle, CircleNotch, CaretDown, CaretRight } from "@phosphor-icons/react";
 import { useDeploy } from "../../context/DeployContext";
 import { validateProject, collectProjectFiles } from "../../services/backendService";
 
@@ -15,7 +15,7 @@ const CheckRow = ({ check }) => {
   const icon = check.status === "pass"
     ? <CheckCircle size={13} className="val-icon pass" />
     : check.status === "warn"
-    ? <AlertTriangle size={13} className="val-icon warn" />
+    ? <Warning size={13} className="val-icon warn" />
     : <XCircle size={13} className="val-icon fail" />;
 
   return (
@@ -24,7 +24,7 @@ const CheckRow = ({ check }) => {
         {icon}
         <span className="val-check-label">{check.label}</span>
         {!check.required && <span className="val-optional">optional</span>}
-        {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+        {open ? <CaretDown size={11} /> : <CaretRight size={11} />}
       </button>
       {open && (
         <div className="val-check-detail">
@@ -49,7 +49,7 @@ const CheckGroup = ({ group, checks }) => {
   return (
     <div className="val-group">
       <button className="val-group-header" onClick={() => setOpen(v => !v)}>
-        {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        {open ? <CaretDown size={13} /> : <CaretRight size={13} />}
         <span>{group.label}</span>
         <span className="val-group-counts">
           <span className="val-count pass">{passCount}✓</span>
@@ -104,7 +104,7 @@ const ValidationPanel = ({ treeData, fileContents }) => {
           <option value="full-stack">Full Stack</option>
         </select>
         <button className="deploy-btn deploy-btn-primary" onClick={handleValidate} disabled={loading}>
-          {loading ? <Loader size={12} className="spin" /> : <ShieldCheck size={12} />}
+          {loading ? <CircleNotch size={12} className="spin" /> : <ShieldCheck size={12} />}
           {loading ? "Validating..." : "Validate"}
         </button>
       </div>

@@ -1,10 +1,10 @@
 import React, { memo, useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { Plus, X, Terminal as TerminalIcon } from "lucide-react";
+import { Plus, X, Terminal as TerminalIcon } from "@phosphor-icons/react";
 import { loadState, saveStateSection } from "../../utils/storage";
 import { executeTerminalCommand, isBackendCommand } from "./terminalCommands";
 import { collectProjectFiles, submitCommand, connectBuildStream, killCommand, getPreviewUrl } from "../../services/backendService";
 
-const MIN_HEIGHT = 56;
+const MIN_HEIGHT = 48;
 const COLLAPSE_THRESHOLD = 60;
 const DEFAULT_HEIGHT = 350;
 const MAX_HEIGHT = 600;
@@ -448,14 +448,15 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
       <div className={`terminal-resize-handle ${isDragging ? "dragging" : ""}`} onMouseDown={handleMouseDown} />
 
       <div className="terminal-header">
-        <button className="terminal-title-btn" onClick={toggleCollapse}>
+        <button className="terminal-title-btn" onClick={toggleCollapse} title={isCollapsed ? "Expand" : "Minimize"}>
+          <TerminalIcon size={14} className="terminal-title-icon" />
           <span className="terminal-title">Terminal</span>
           {activeTerminal.isRunning && <span className="terminal-running-badge">Running</span>}
         </button>
         {!isCollapsed && (
           <div className="terminal-header-actions">
             <button className="terminal-header-add-btn" onClick={addTerminal} title="New Terminal">
-              <Plus size={16} />
+              <Plus size={14} />
             </button>
           </div>
         )}

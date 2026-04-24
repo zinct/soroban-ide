@@ -1,5 +1,5 @@
 import React, { memo, useState, useMemo, useRef, useEffect } from "react";
-import { Copy, Check, ChevronRight } from "lucide-react";
+import { Copy, Check, CaretRight } from "@phosphor-icons/react";
 import { tutorialData } from "./tutorialData";
 import { loadState, saveStateSection } from "../../utils/storage";
 
@@ -147,7 +147,7 @@ const LangSelector = ({ currentLang, onSelect }) => {
       <button className={`tutorial-lang-dropdown-trigger ${isOpen ? "open" : ""}`} onClick={() => setIsOpen(!isOpen)}>
         <span className="lang-flag-main">{selected.flag}</span>
         <span className="lang-id-label">{selected.id.toUpperCase()}</span>
-        <ChevronRight size={14} className={`dropdown-arrow ${isOpen ? "open" : ""}`} />
+        <CaretRight size={14} className={`dropdown-arrow ${isOpen ? "open" : ""}`} />
       </button>
       {isOpen && (
         <div className="tutorial-lang-dropdown-menu">

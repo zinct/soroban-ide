@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { Wallet, Hammer, Rocket, CheckCircle, AlertCircle, Loader, Copy, Check, Play, ChevronDown, ChevronRight } from "lucide-react";
+import { Wallet, Hammer, Rocket, CheckCircle, WarningCircle, CircleNotch, Copy, Check, Play, CaretDown, CaretRight } from "@phosphor-icons/react";
 import { useDeploy } from "../../context/DeployContext";
 import { useContract } from "../../context/ContractContext";
 import {
@@ -22,9 +22,9 @@ const runInTerminal = (cmd, files, onDone, onContractId) => {
 const StatusBadge = ({ status }) => {
   if (!status) return null;
   const map = {
-    running: { icon: <Loader size={11} className="spin" />, label: "Running",  cls: "badge-running" },
+    running: { icon: <CircleNotch size={11} className="spin" />, label: "Running",  cls: "badge-running" },
     success: { icon: <CheckCircle size={11} />,             label: "Success",  cls: "badge-success" },
-    error:   { icon: <AlertCircle size={11} />,             label: "Failed",   cls: "badge-error"   },
+    error:   { icon: <WarningCircle size={11} />,             label: "Failed",   cls: "badge-error"   },
   };
   const s = map[status];
   if (!s) return null;
@@ -38,7 +38,7 @@ const Section = ({ icon, title, children, defaultOpen = true, badge }) => {
       <button className="deploy-section-header" onClick={() => setOpen(v => !v)}>
         {icon}<span>{title}</span>
         {badge && <span style={{ marginLeft: 8 }}>{badge}</span>}
-        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        {open ? <CaretDown size={14} /> : <CaretRight size={14} />}
       </button>
       {open && <div className="deploy-section-body">{children}</div>}
     </div>
@@ -350,7 +350,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
             <>
               <p className="deploy-hint">No default account yet.</p>
               <button className="deploy-btn deploy-btn-primary" onClick={handleInitWallet} disabled={walletLoading}>
-                {walletLoading ? <Loader size={12} className="spin" /> : <Wallet size={12} />}
+                {walletLoading ? <CircleNotch size={12} className="spin" /> : <Wallet size={12} />}
                 {walletLoading ? "Creating..." : "Create & Fund Account"}
               </button>
             </>
@@ -400,7 +400,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
       {/* ── Compile ── */}
       <Section icon={<Hammer size={14} />} title="Compile" badge={<StatusBadge status={compileStatus} />}>
         <button className="deploy-btn deploy-btn-primary" onClick={handleCompile} disabled={compileStatus === "running"}>
-          {compileStatus === "running" ? <Loader size={14} className="spin" /> : <Hammer size={14} />}
+          {compileStatus === "running" ? <CircleNotch size={14} className="spin" /> : <Hammer size={14} />}
           {compileStatus === "running" ? "Compiling..." : "Build Contract"}
         </button>
       </Section>
@@ -431,7 +431,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
           onClick={handleDeploy}
           disabled={compileStatus !== "success" || deployStatus === "running"}
         >
-          {deployStatus === "running" ? <Loader size={14} className="spin" /> : <Rocket size={14} />}
+          {deployStatus === "running" ? <CircleNotch size={14} className="spin" /> : <Rocket size={14} />}
           {deployStatus === "running" ? "Deploying..." : "Deploy"}
         </button>
         {compileStatus !== "success" && <div className="deploy-hint">Build must succeed first.</div>}
@@ -506,7 +506,7 @@ const FnCard = ({ fn, fnArgs, setFnArgs, onInvoke, invoking, result }) => {
         </div>
       ))}
       <button className="deploy-btn deploy-btn-invoke" onClick={() => onInvoke(fn)} disabled={invoking}>
-        {invoking ? <Loader size={11} className="spin" /> : <Play size={11} />}
+        {invoking ? <CircleNotch size={11} className="spin" /> : <Play size={11} />}
         {invoking ? "Calling…" : "Call"}
       </button>
       {result?.error && <pre className="deploy-fn-result error">{result.error}</pre>}

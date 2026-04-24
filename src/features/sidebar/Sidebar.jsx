@@ -16,7 +16,7 @@ const PANEL_WIDTHS = {
   deploy: 500,
   validation: 500,
 };
-import { Settings, BookOpen, Rocket, CheckCircle2 } from "lucide-react";
+import { Gear, BookOpen, Rocket, CheckCircle } from "@phosphor-icons/react";
 import TutorialPanel from "../tutorial/TutorialPanel";
 import DeployPanel from "../deploy/DeployPanel";
 import ValidationPanel from "../validation/ValidationPanel";
@@ -692,12 +692,12 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
               }
             }}
             title="Validate Project">
-            <CheckCircle2 size={24} />
+            <CheckCircle size={24} />
           </button>
 
           <div style={{ marginTop: "auto", width: "100%" }}>
             <button className={`activity-btn ${isSettingsOpen ? "active" : ""}`} onClick={onToggleSettings} title="Settings">
-              <Settings size={24} />
+              <Gear size={24} />
             </button>
           </div>
         </div>

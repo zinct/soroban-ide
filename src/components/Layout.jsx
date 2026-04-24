@@ -8,7 +8,7 @@ import { cloneRepository } from "../services/githubService";
 import { FileIconImg, FolderIconImg } from "../components/icons/FileIcon";
 import { ChevronDown, ChevronRight } from "../components/icons/ChevronIcons";
 import { sortNodes, uniqueId, ensureTreeIds } from "../features/workspace/workspaceUtils";
-import { Plus, FolderOpen, FileText, X, Menu } from "lucide-react";
+import { Plus, FolderOpen, FileText, X, List } from "@phosphor-icons/react";
 import Sidebar from "../features/sidebar/Sidebar";
 import Tabs from "../features/tabs/Tabs";
 import Editor from "../features/editor/Editor";
@@ -18,7 +18,7 @@ import { cloneNodeWithNewIds, addNodeToTree, moveNodeInTree } from "../features/
 import SettingsPanel from "../features/settings/SettingsPanel";
 import AIPanel from "../features/ai/AIPanel";
 import CommandPalette from "../features/palette/CommandPalette";
-import { Sparkles } from "lucide-react";
+import { Sparkle } from "@phosphor-icons/react";
 import "../styles/settings.css";
 
 /**
@@ -557,7 +557,7 @@ const Layout = () => {
                     onClick={() => setShowAIPanel(true)}
                     title="Toggle AI Chat"
                   >
-                    <Sparkles size={20} />
+                    <Sparkle size={20} />
                   </button>
                   {showCreateMenu && (
                     <div className="create-new-dropdown">

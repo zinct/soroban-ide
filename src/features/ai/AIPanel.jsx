@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, memo, useMemo, useLayoutEffect } from "react";
-import { Sparkles, X, ArrowUp, User, Bot, MessageSquare, Plus, Copy, Check, ArrowDown } from "lucide-react";
+import { Sparkle, X, ArrowUp, User, Robot, ChatCircle, Plus, Copy, Check, ArrowDown } from "@phosphor-icons/react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";

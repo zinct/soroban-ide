@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Search, ChevronRight } from "lucide-react";
+import { MagnifyingGlass, CaretRight } from "@phosphor-icons/react";
 import { FileIconImg } from "../../components/icons/FileIcon";
 import { fuzzyScore, highlightMatches } from "./fuzzyMatch";
 
@@ -166,7 +166,7 @@ const CommandPalette = memo(({ isOpen, mode: initialMode, commands, files, onClo
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="command-palette-input-row">
-          <Search size={16} className="command-palette-icon" />
+          <MagnifyingGlass size={16} className="command-palette-icon" />
           <input
             ref={inputRef}
             className="command-palette-input"
@@ -217,7 +217,7 @@ const CommandPalette = memo(({ isOpen, mode: initialMode, commands, files, onClo
                     {item.kind === "file" ? (
                       <FileIconImg filename={item.payload.name} />
                     ) : (
-                      <ChevronRight size={14} />
+                      <CaretRight size={14} />
                     )}
                   </span>
                   <span className="command-palette-item-body">

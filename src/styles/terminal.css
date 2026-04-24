@@ -15,7 +15,7 @@
 }
 
 .terminal.collapsed {
-  height: 56px; /* MIN_HEIGHT sync with JS and header height */
+  height: 48px; /* MIN_HEIGHT sync with JS and header height */
   flex: 0 0 auto;
   background: transparent;
   border-top: none;
@@ -24,6 +24,7 @@
 
 .terminal.collapsed .terminal-header {
   border-bottom: none;
+  box-shadow: none;
 }
 
 .terminal.collapsed .terminal-title-btn {
@@ -62,15 +63,18 @@
 .terminal-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 12px 0 0; /* Allow title to touch left, actions on right */
-  height: var(--header-height);
+  justify-content: flex-start;
+  padding: 0;
+  height: 48px;
+  border-top: 1px solid var(--border-color);
   border-bottom: 1px solid var(--border-color);
   pointer-events: auto;
-  background: rgba(var(--main-bg-rgb), 0.45);
+  background: rgba(var(--main-bg-rgb), 0.6);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   z-index: 10;
+  position: relative;
 }
 
 .terminal-title-btn {
@@ -80,38 +84,58 @@
   background: transparent;
   border: none;
   border-right: 1px solid var(--border-color);
-  color: inherit;
+  color: var(--text-primary);
   cursor: pointer;
   padding: 0 24px;
   height: 100%;
   margin: 0;
   transition: all 0.2s ease;
-  flex: 0 0 auto;
+  flex: 1;
   justify-content: flex-start;
+  position: relative;
+  z-index: 2;
+}
+
+.terminal-title-btn:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.terminal-title {
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+}
+
+.terminal-title-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
 }
 
 .terminal-header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-left: auto;
+  gap: 4px;
+  position: absolute;
+  right: 12px;
+  z-index: 10;
 }
 
 .terminal-header-add-btn {
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 6px;
-  border-radius: 4px;
+  padding: 5px 7px;
+  border-radius: 5px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all 0.15s ease;
 }
 
 .terminal-header-add-btn:hover {
-  background: var(--hover-bg);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border-color);
   color: var(--text-primary);
 }
 

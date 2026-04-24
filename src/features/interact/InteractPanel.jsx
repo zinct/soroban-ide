@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useContract } from "../../context/ContractContext";
-import { X, Play, Copy, Check, Wallet, AlertCircle } from "lucide-react";
+import { X, Play, Copy, Check, Wallet, WarningCircle } from "@phosphor-icons/react";
 
 const InteractPanel = () => {
   const { contractId, walletAddress, connectWallet, setIsInteractActive } = useContract();
@@ -103,7 +103,7 @@ const InteractPanel = () => {
                 <div className="form-actions">
                   {!walletAddress ? (
                     <div className="wallet-warning">
-                      <AlertCircle size={18} />
+                      <WarningCircle size={18} />
                       <span>Wallet not connected. Connect Freighter to execute.</span>
                       <button className="btn btn-primary" onClick={connectWallet} style={{ marginLeft: "auto" }}>
                         <Wallet size={16} />

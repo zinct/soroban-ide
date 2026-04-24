@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Palette, Type, Cpu, Monitor } from "lucide-react";
+import { X, Palette, TextT, Cpu, Monitor } from "@phosphor-icons/react";
 
 const SettingsPanel = ({ currentTheme, onThemeChange, onClose }) => {
   const [activeTab, setActiveTab] = useState("appearance");
@@ -80,7 +80,7 @@ const SettingsPanel = ({ currentTheme, onThemeChange, onClose }) => {
           onClick={() => setActiveTab("editor")}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <Type size={16} /> Editor
+            <TextT size={16} /> Editor
           </div>
         </div>
 
