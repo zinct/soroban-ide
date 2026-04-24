@@ -76,9 +76,9 @@ export const collectProjectFiles = (treeData, fileContents, options = {}) => {
           if (content !== undefined) {
             files[filePath] = content;
           }
-        } else {
-          console.warn(`[backendService] Skipping non-source file: ${filePath}`);
         }
+        // Silently skip non-source files (binaries, PDFs, lockfiles, etc.) —
+        // they're expected and the noise drowns out real warnings.
       }
 
       if (node.children?.length) {
