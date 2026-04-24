@@ -17,7 +17,7 @@
 
 .terminal.animate {
   transition:
-    height 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.3s cubic-bezier(0.22, 1, 0.36, 1),
     background 0.3s ease;
 }
 
@@ -141,24 +141,7 @@
   padding-right: 8px;
 }
 
-.terminal-header-action-btn {
-  background: transparent;
-  border: none;
-  border-left: none;
-  color: var(--text-primary);
-  cursor: pointer;
-  padding: 0;
-  width: 44px;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s ease;
-}
-
-.terminal-header-action-btn:hover {
-  background: var(--hover-bg);
-}
+/* Styles moved to index.css for reusability */
 
 .terminal.collapsed .terminal-window {
   display: none;

@@ -222,6 +222,23 @@ body {
   background: var(--editor-bg);
   padding-top: 12px;
   margin-bottom: var(--terminal-current-height, 44px);
-  transition: margin-bottom 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: margin-bottom var(--terminal-transition-duration, 0.4s) cubic-bezier(0.22, 1, 0.36, 1);
   overflow: hidden;
+}
+.panel-header-action-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 0;
+  width: 44px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.panel-header-action-btn:hover {
+  background: var(--hover-bg);
 }
