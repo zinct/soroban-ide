@@ -1,5 +1,6 @@
 import React, { memo, useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { Plus, X, Trash, Terminal as TerminalIcon, CornersOut, CornersIn } from "@phosphor-icons/react";
+import PanelActionButton from "../../components/common/PanelActionButton";
 import { loadState, saveStateSection } from "../../utils/storage";
 import { executeTerminalCommand, isBackendCommand } from "./terminalCommands";
 import { collectProjectFiles, submitCommand, connectBuildStream, killCommand, getPreviewUrl } from "../../services/backendService";
@@ -8,6 +9,7 @@ const MIN_HEIGHT = 44;
 const COLLAPSE_THRESHOLD = 60;
 const DEFAULT_HEIGHT = 350;
 const MAX_HEIGHT = 600;
+const MAX_TERMINALS = 5;
 
 const SESSION_NAMES = ["matcha-latte", "caramel-macchiato", "vanilla-frappe", "ice-americano", "espresso-shot", "hazelnut-latte", "thai-tea", "peach-oolong", "berry-smoothie", "taro-milk", "brown-sugar", "red-velvet", "cookies-cream", "oat-milk-latte", "choco-mint", "lemon-squash", "avocado-coffee", "butterfly-pea", "matcha-espresso"];
 
@@ -135,6 +137,7 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
   const addTerminal = useCallback(
     (e) => {
       if (e) e.stopPropagation();
+      if (terminals.length >= MAX_TERMINALS) return;
       const id = `term-${Date.now()}`;
       const newTerm = createTerminalInstance(id, getRandomSessionName(), currentDirectory);
       setTerminals((prev) => [...prev, newTerm]);
@@ -153,7 +156,8 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
     const root = document.documentElement;
     const h = isCollapsed ? MIN_HEIGHT : (isMaximized ? 0 : height);
     root.style.setProperty("--terminal-current-height", `${h}px`);
-  }, [height, isCollapsed, isMaximized]);
+    root.style.setProperty("--terminal-transition-duration", isDragging ? "0s" : "0.3s");
+  }, [height, isCollapsed, isMaximized, isDragging]);
 
   const toggleMaximize = useCallback((e) => {
     if (e) e.stopPropagation();
@@ -524,15 +528,11 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
         </div>
         {!isCollapsed && (
           <div className="terminal-header-actions">
-            <button className="terminal-header-action-btn" onClick={addTerminal} title="New Terminal">
-              <Plus size={18} weight="bold" />
-            </button>
-            <button className="terminal-header-action-btn" onClick={toggleMaximize} title={isMaximized ? "Restore" : "Maximize"}>
-              {isMaximized ? <CornersIn size={18} weight="bold" /> : <CornersOut size={18} weight="bold" />}
-            </button>
-            <button className="terminal-header-action-btn" onClick={handleHeaderMinimize} title="Minimize">
-              <X size={18} weight="bold" />
-            </button>
+            {terminals.length < MAX_TERMINALS && (
+              <PanelActionButton icon={Plus} onClick={addTerminal} title="New Terminal" />
+            )}
+            <PanelActionButton icon={isMaximized ? CornersIn : CornersOut} onClick={toggleMaximize} title={isMaximized ? "Restore" : "Maximize"} />
+            <PanelActionButton icon={X} onClick={handleHeaderMinimize} title="Minimize" />
           </div>
         )}
       </div>
