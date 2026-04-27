@@ -323,7 +323,10 @@ const DeployPanel = ({ treeData, fileContents }) => {
       return;
     }
     const useFreighter = sourceAccount === "freighter" && walletAddress;
-    const sourceKey = useFreighter ? "freighter-wallet" : (defaultWallet?.name || "stellar-ide-default");
+    // For Freighter deploys we pass the live public key directly instead of a
+    // backend identity alias. The alias can get stale if the extension account
+    // changes, which leads to source/sequence mismatches (txBadSeq).
+    const sourceKey = useFreighter ? walletAddress : (defaultWallet?.name || "stellar-ide-default");
     const buildOnly = useFreighter ? " --build-only" : "";
     // Random salt prevents contract ID collision on re-deploy
     const salt = Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2, "0")).join("");
