@@ -606,6 +606,26 @@
 
 /* ── Deployment history (multi-contract) ──────────────────────────────── */
 
+.deploy-history-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.deploy-history-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+}
+.deploy-history-search .deploy-input {
+  flex: 1;
+}
+.deploy-history-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 /* Group = one contract folder's entire deploy history */
 .deploy-group {
   border: 1px solid var(--border-color);
@@ -731,6 +751,11 @@
   gap: 4px;
   text-decoration: none;
 }
+.deploy-btn-small.is-pinned {
+  color: #fbbf24 !important;
+  border-color: rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.1) !important;
+}
 /* anchor tag gets the deploy-btn class but needs its underline stripped */
 a.deploy-btn { text-decoration: none; }
 
@@ -796,6 +821,9 @@ a.deploy-btn { text-decoration: none; }
   gap: 2px;
   flex-shrink: 0;
 }
+.deploy-icon-btn-starred {
+  color: #fbbf24 !important;
+}
 .deploy-icon-btn-danger:hover { color: #ef4444 !important; }
 
 /* Clear buttons (per-group and global) */
@@ -823,6 +851,91 @@ a.deploy-btn { text-decoration: none; }
   border-color: rgba(239, 68, 68, 0.4);
 }
 .deploy-history-clear { margin-top: 8px; }
+
+/* Diff modal */
+.deploy-diff-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.deploy-diff-modal {
+  width: min(820px, 96vw);
+  max-height: 85vh;
+  overflow: auto;
+  background: #141414;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.deploy-diff-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.deploy-diff-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.deploy-diff-subtitle {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.deploy-diff-section {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.deploy-diff-section-title {
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+.deploy-diff-row {
+  display: grid;
+  grid-template-columns: 130px 1fr auto 1fr;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+.deploy-diff-key {
+  color: var(--text-muted);
+}
+.deploy-diff-new,
+.deploy-diff-old {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  word-break: break-word;
+}
+.deploy-diff-arrow {
+  color: var(--text-muted);
+}
+.deploy-diff-fn-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.deploy-diff-fn-item {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
 
 /* ── Spinner ── */
 .spin { animation: spin 1s linear infinite; }

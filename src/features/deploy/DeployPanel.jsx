@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { Wallet, Hammer, Rocket, CheckCircle, AlertCircle, Loader, Copy, Check, Play, ChevronDown, ChevronRight, Folder, RefreshCw, ExternalLink, Trash2, ArrowUpCircle } from "lucide-react";
+import { Wallet, Hammer, Rocket, CheckCircle, AlertCircle, Loader, Copy, Check, Play, ChevronDown, ChevronRight, Folder, RefreshCw, ExternalLink, Trash2, ArrowUpCircle, Star, Search } from "lucide-react";
 import { useDeploy } from "../../context/DeployContext";
 import { useContract } from "../../context/ContractContext";
 import {
@@ -80,7 +80,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
     defaultWallet, setDefaultWallet, walletLoading, setWalletLoading,
     compileStatus, setCompileStatus,
     deployStatus, setDeployStatus,
-    deploymentHistory, addDeployment, removeDeployment, clearGroup, clearAllHistory, promoteToActive,
+    deploymentHistory, addDeployment, removeDeployment, clearGroup, clearAllHistory, promoteToActive, togglePinned,
   } = useDeploy();
   const { walletAddress, walletNetwork, connectWallet, disconnectWallet, error: walletConnectError } = useContract();
 
@@ -185,6 +185,58 @@ const DeployPanel = ({ treeData, fileContents }) => {
   // ─── Derived deploy history ──────────────────────────────────────────────
 
   const groups = useMemo(() => listGroups(deploymentHistory), [deploymentHistory]);
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [historyWalletFilter, setHistoryWalletFilter] = useState("all");
+  const [historyNetworkFilter, setHistoryNetworkFilter] = useState("all");
+  const [historyContractFilter, setHistoryContractFilter] = useState("all");
+  const [diffPair, setDiffPair] = useState(null); // { newer, older }
+
+  const historyFilterOptions = useMemo(() => {
+    const wallets = new Set();
+    const networks = new Set();
+    groups.forEach((g) => {
+      g.deployments.forEach((d) => {
+        if (d.wallet) wallets.add(d.wallet);
+        if (d.network) networks.add((d.network || "").toLowerCase());
+      });
+    });
+    return {
+      wallets: [...wallets].sort(),
+      networks: [...networks].sort(),
+    };
+  }, [groups]);
+
+  const filteredGroups = useMemo(() => {
+    const q = historyQuery.trim().toLowerCase();
+    return groups
+      .filter((g) => historyContractFilter === "all" || g.path === historyContractFilter)
+      .map((g) => {
+        const deployments = g.deployments
+          .filter((d) => {
+            if (historyWalletFilter !== "all" && (d.wallet || "") !== historyWalletFilter) return false;
+            if (historyNetworkFilter !== "all" && (d.network || "").toLowerCase() !== historyNetworkFilter) return false;
+            if (!q) return true;
+            const hay = [
+              d.id,
+              d.alias,
+              d.crateName,
+              d.path,
+              d.wallet,
+              d.walletAddress,
+              d.network,
+            ].filter(Boolean).join(" ").toLowerCase();
+            return hay.includes(q);
+          })
+          .sort((a, b) => {
+            if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+            if (a.status === "active" && b.status !== "active") return -1;
+            if (a.status !== "active" && b.status === "active") return 1;
+            return (b.deployedAt || 0) - (a.deployedAt || 0);
+          });
+        return { ...g, deployments };
+      })
+      .filter((g) => g.deployments.length > 0);
+  }, [groups, historyContractFilter, historyWalletFilter, historyNetworkFilter, historyQuery]);
 
   // Active deployment for the currently-selected contract (used by the
   // "replace?" confirm dialog and the Deploy button's "redeploy" state).
@@ -508,6 +560,10 @@ const DeployPanel = ({ treeData, fileContents }) => {
     clearAllHistory();
   }, [clearAllHistory]);
 
+  const handleTogglePinned = useCallback((path, id) => {
+    togglePinned(path, id);
+  }, [togglePinned]);
+
   return (
     <div className="deploy-panel">
       {showReplaceDialog && (
@@ -735,7 +791,35 @@ const DeployPanel = ({ treeData, fileContents }) => {
           <div className="deploy-hint">Deploy a contract to interact with it here.</div>
         ) : (
           <>
-            {groups.map((g) => (
+            <div className="deploy-history-toolbar">
+              <div className="deploy-history-search">
+                <Search size={12} />
+                <input
+                  className="deploy-input"
+                  value={historyQuery}
+                  onChange={(e) => setHistoryQuery(e.target.value)}
+                  placeholder="Search by alias, contract ID, wallet, path..."
+                />
+              </div>
+              <div className="deploy-history-filters">
+                <select className="deploy-input" value={historyContractFilter} onChange={(e) => setHistoryContractFilter(e.target.value)}>
+                  <option value="all">All contracts</option>
+                  {groups.map((g) => <option key={g.path} value={g.path}>{g.path}</option>)}
+                </select>
+                <select className="deploy-input" value={historyWalletFilter} onChange={(e) => setHistoryWalletFilter(e.target.value)}>
+                  <option value="all">All wallets</option>
+                  {historyFilterOptions.wallets.map((w) => <option key={w} value={w}>{w}</option>)}
+                </select>
+                <select className="deploy-input" value={historyNetworkFilter} onChange={(e) => setHistoryNetworkFilter(e.target.value)}>
+                  <option value="all">All networks</option>
+                  {historyFilterOptions.networks.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+            </div>
+            {filteredGroups.length === 0 && (
+              <div className="deploy-hint">No deployments match the current filters.</div>
+            )}
+            {filteredGroups.map((g) => (
               <DeploymentGroup
                 key={g.path}
                 group={g}
@@ -750,16 +834,25 @@ const DeployPanel = ({ treeData, fileContents }) => {
                 onArgChange={setFnArgForContract}
                 onToggleTest={toggleTestExpanded}
                 onPromote={promoteToActive}
+                onTogglePinned={handleTogglePinned}
                 onRemove={handleRemoveDeployment}
                 onClearGroup={handleClearGroup}
+                onOpenDiff={(newer, older) => setDiffPair({ newer, older })}
               />
             ))}
-            <button className="deploy-history-clear" onClick={handleClearAll}>
+            <button className="deploy-history-clear" onClick={handleClearAll} disabled={filteredGroups.length === 0}>
               <Trash2 size={11} /> Clear all history
             </button>
           </>
         )}
       </Section>
+      {diffPair && (
+        <DeploymentDiffModal
+          newer={diffPair.newer}
+          older={diffPair.older}
+          onClose={() => setDiffPair(null)}
+        />
+      )}
     </div>
   );
 };
@@ -767,7 +860,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
 // ─── Group: one contract folder + its deployment history ────────────────────
 const DeploymentGroup = ({
   group, contracts, invokeResults, invokingFn, fnArgs, expandedTest, copiedId,
-  onCopyId, onInvoke, onArgChange, onToggleTest, onPromote, onRemove, onClearGroup,
+  onCopyId, onInvoke, onArgChange, onToggleTest, onPromote, onTogglePinned, onRemove, onClearGroup, onOpenDiff,
 }) => {
   const [open, setOpen] = useState(true);
   const active = group.deployments.find((d) => d.status === "active") || group.deployments[0];
@@ -797,6 +890,7 @@ const DeploymentGroup = ({
             deployment={active}
             copiedId={copiedId}
             onCopyId={onCopyId}
+            onTogglePinned={onTogglePinned}
             invokeResults={invokeResults}
             invokingFn={invokingFn}
             fnArgs={fnArgs}
@@ -816,6 +910,8 @@ const DeploymentGroup = ({
                   copiedId={copiedId}
                   onCopyId={onCopyId}
                   onPromote={onPromote}
+                  onTogglePinned={onTogglePinned}
+                  onDiff={() => onOpenDiff(active, d)}
                   onRemove={onRemove}
                 />
               ))}
@@ -833,7 +929,7 @@ const DeploymentGroup = ({
 // ─── Active deployment card (the headline entry for a group) ───────────────
 const ActiveDeployment = ({
   deployment, copiedId, onCopyId, invokeResults, invokingFn, fnArgs, expanded,
-  onToggleTest, onInvoke, onArgChange, onRemove,
+  onToggleTest, onInvoke, onArgChange, onTogglePinned, onRemove,
 }) => {
   const fns = deployment.functions || [];
   const readFns  = fns.filter((f) => f.category === "read");
@@ -862,6 +958,13 @@ const ActiveDeployment = ({
         </button>
       </div>
       <div className="deploy-active-actions">
+        <button
+          className={`deploy-btn deploy-btn-secondary deploy-btn-small ${deployment.pinned ? "is-pinned" : ""}`}
+          onClick={() => onTogglePinned(deployment.path, deployment.id)}
+          title={deployment.pinned ? "Unpin from top" : "Pin to top"}
+        >
+          <Star size={11} /> {deployment.pinned ? "Pinned" : "Pin"}
+        </button>
         <a
           className="deploy-btn deploy-btn-secondary deploy-btn-small"
           href={explorerUrl(deployment.id, deployment.network)}
@@ -946,7 +1049,7 @@ const ActiveDeployment = ({
 };
 
 // ─── Previous deployment row (compact) ──────────────────────────────────────
-const PreviousRow = ({ deployment, copiedId, onCopyId, onPromote, onRemove }) => {
+const PreviousRow = ({ deployment, copiedId, onCopyId, onPromote, onTogglePinned, onDiff, onRemove }) => {
   return (
     <div className="deploy-previous-row">
       <span className="deploy-previous-id" title={deployment.id}>{shortId(deployment.id)}</span>
@@ -978,12 +1081,81 @@ const PreviousRow = ({ deployment, copiedId, onCopyId, onPromote, onRemove }) =>
           <ArrowUpCircle size={11} />
         </button>
         <button
+          className={`deploy-icon-btn ${deployment.pinned ? "deploy-icon-btn-starred" : ""}`}
+          onClick={() => onTogglePinned(deployment.path, deployment.id)}
+          title={deployment.pinned ? "Unpin deployment" : "Pin deployment"}
+        >
+          <Star size={11} />
+        </button>
+        <button
+          className="deploy-icon-btn"
+          onClick={onDiff}
+          title="Diff against active deployment"
+        >
+          Δ
+        </button>
+        <button
           className="deploy-icon-btn deploy-icon-btn-danger"
           onClick={() => onRemove(deployment.path, deployment.id)}
           title="Remove from history"
         >
           <Trash2 size={11} />
         </button>
+      </div>
+    </div>
+  );
+};
+
+const DeploymentDiffModal = ({ newer, older, onClose }) => {
+  const newerFns = new Set((newer?.functions || []).map((f) => f.name));
+  const olderFns = new Set((older?.functions || []).map((f) => f.name));
+  const addedFns = [...newerFns].filter((n) => !olderFns.has(n));
+  const removedFns = [...olderFns].filter((n) => !newerFns.has(n));
+  const changed = [
+    ["Contract ID", newer?.id, older?.id],
+    ["Alias", newer?.alias || "(none)", older?.alias || "(none)"],
+    ["Wallet", newer?.wallet || "(unknown)", older?.wallet || "(unknown)"],
+    ["Wallet Address", newer?.walletAddress || "(unknown)", older?.walletAddress || "(unknown)"],
+    ["Network", newer?.network || "(unknown)", older?.network || "(unknown)"],
+    ["Deployed At", newer?.deployedAt ? new Date(newer.deployedAt).toLocaleString() : "-", older?.deployedAt ? new Date(older.deployedAt).toLocaleString() : "-"],
+  ].filter(([, a, b]) => a !== b);
+
+  return (
+    <div className="deploy-diff-backdrop" onClick={onClose}>
+      <div className="deploy-diff-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="deploy-diff-header">
+          <div className="deploy-diff-title">Deployment Diff</div>
+          <button className="deploy-icon-btn" onClick={onClose}>Close</button>
+        </div>
+        <div className="deploy-diff-subtitle">
+          Comparing <code>{shortId(newer?.id)}</code> (active) vs <code>{shortId(older?.id)}</code> (previous)
+        </div>
+        <div className="deploy-diff-section">
+          <div className="deploy-diff-section-title">Metadata changes</div>
+          {changed.length === 0 ? (
+            <div className="deploy-hint">No metadata differences.</div>
+          ) : changed.map(([label, a, b]) => (
+            <div key={label} className="deploy-diff-row">
+              <span className="deploy-diff-key">{label}</span>
+              <span className="deploy-diff-new">{String(a)}</span>
+              <span className="deploy-diff-arrow">←</span>
+              <span className="deploy-diff-old">{String(b)}</span>
+            </div>
+          ))}
+        </div>
+        <div className="deploy-diff-section">
+          <div className="deploy-diff-section-title">Function signature set</div>
+          <div className="deploy-diff-fn-grid">
+            <div>
+              <div className="deploy-fn-group-label read">Added ({addedFns.length})</div>
+              {addedFns.length === 0 ? <div className="deploy-hint">None</div> : addedFns.map((n) => <div key={n} className="deploy-diff-fn-item">+ {n}</div>)}
+            </div>
+            <div>
+              <div className="deploy-fn-group-label write">Removed ({removedFns.length})</div>
+              {removedFns.length === 0 ? <div className="deploy-hint">None</div> : removedFns.map((n) => <div key={n} className="deploy-diff-fn-item">- {n}</div>)}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

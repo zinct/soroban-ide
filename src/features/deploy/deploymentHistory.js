@@ -97,6 +97,15 @@ export function promoteToActive(history, path, id) {
   return { ...history, [path]: reordered };
 }
 
+/** Toggle "pinned" status for a single deployment record. */
+export function togglePinned(history, path, id) {
+  if (!history || !history[path]) return history || {};
+  const nextList = history[path].map((r) => (
+    r.id === id ? { ...r, pinned: !r.pinned } : r
+  ));
+  return { ...history, [path]: nextList };
+}
+
 /**
  * Turn the bucket object into a stable array of groups, sorted by most
  * recent deployment across the group (so whichever contract the user just

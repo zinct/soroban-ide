@@ -6,6 +6,7 @@ import {
   removeDeployment as removeDeploymentPure,
   clearGroup as clearGroupPure,
   promoteToActive as promoteToActivePure,
+  togglePinned as togglePinnedPure,
 } from "../features/deploy/deploymentHistory";
 
 const DeployContext = createContext(null);
@@ -71,6 +72,10 @@ export const DeployProvider = ({ children }) => {
     setDeploymentHistory((h) => promoteToActivePure(h, path, id));
   }, []);
 
+  const togglePinned = useCallback((path, id) => {
+    setDeploymentHistory((h) => togglePinnedPure(h, path, id));
+  }, []);
+
   const resetDeploy = useCallback(() => {
     setCompileStatus(null);
     setDeployStatus(null);
@@ -83,7 +88,7 @@ export const DeployProvider = ({ children }) => {
       deployStatus, setDeployStatus,
       validationResult, setValidationResult,
       deploymentHistory,
-      addDeployment, removeDeployment, clearGroup, clearAllHistory, promoteToActive,
+      addDeployment, removeDeployment, clearGroup, clearAllHistory, promoteToActive, togglePinned,
       resetDeploy,
     }}>
       {children}
