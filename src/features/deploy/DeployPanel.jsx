@@ -27,6 +27,7 @@ import {
 
 const CONTRACT_STORAGE_KEY = "soroban:selectedContract";
 const DEPLOY_PRESETS_KEY = "soroban:deploy_presets";
+const INVOKE_CASES_KEY = "soroban:invoke_test_cases";
 
 // Coerce arbitrary error values into a printable string. Catches the
 // `[object Object]` regression that appears when a thrown value isn't an
@@ -62,6 +63,21 @@ const loadDeployPresets = () => {
 
 const saveDeployPresets = (data) => {
   try { localStorage.setItem(DEPLOY_PRESETS_KEY, JSON.stringify(data || {})); } catch {}
+};
+
+const loadInvokeCases = () => {
+  try {
+    const raw = localStorage.getItem(INVOKE_CASES_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const saveInvokeCases = (data) => {
+  try { localStorage.setItem(INVOKE_CASES_KEY, JSON.stringify(data || {})); } catch {}
 };
 
 // Dispatch a command to the Terminal panel
@@ -117,6 +133,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
   const [presetName, setPresetName] = useState("");
   const [selectedPresetId, setSelectedPresetId] = useState("");
   const [presetsByPath, setPresetsByPath] = useState(() => loadDeployPresets());
+  const [invokeCasesByPath, setInvokeCasesByPath] = useState(() => loadInvokeCases());
   const [copiedId, setCopiedId] = useState(null);
   // Invoke state is scoped by contract ID so each deployed contract has
   // its own independent test surface — essential once multiple contracts
@@ -179,6 +196,10 @@ const DeployPanel = ({ treeData, fileContents }) => {
   useEffect(() => {
     saveDeployPresets(presetsByPath);
   }, [presetsByPath]);
+
+  useEffect(() => {
+    saveInvokeCases(invokeCasesByPath);
+  }, [invokeCasesByPath]);
 
   useEffect(() => {
     setSelectedPresetId("");
@@ -582,6 +603,57 @@ const DeployPanel = ({ treeData, fileContents }) => {
       },
     }));
   }, []);
+
+  const caseKey = useCallback((path, fnName) => `${path || "__unknown__"}::${fnName}`, []);
+
+  const savedCasesFor = useCallback((deployment, fnName) => {
+    const key = caseKey(deployment?.path, fnName);
+    return invokeCasesByPath[key] || [];
+  }, [invokeCasesByPath, caseKey]);
+
+  const saveCurrentArgsAsCase = useCallback((deployment, fn) => {
+    if (!deployment?.path || !fn?.name) return;
+    const key = caseKey(deployment.path, fn.name);
+    const args = fnArgs[deployment.id]?.[fn.name] || {};
+    const label = typeof window !== "undefined"
+      ? window.prompt("Test case name", `case-${new Date().toLocaleTimeString()}`)
+      : "";
+    if (!label || !label.trim()) return;
+    const nextCase = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      label: label.trim(),
+      args,
+      updatedAt: Date.now(),
+    };
+    setInvokeCasesByPath((prev) => {
+      const prior = prev[key] || [];
+      return { ...prev, [key]: [nextCase, ...prior].slice(0, 20) };
+    });
+  }, [fnArgs, caseKey]);
+
+  const applySavedCase = useCallback((deployment, fnName, caseId) => {
+    const key = caseKey(deployment?.path, fnName);
+    const item = (invokeCasesByPath[key] || []).find((c) => c.id === caseId);
+    if (!item) return;
+    setFnArgs((prev) => ({
+      ...prev,
+      [deployment.id]: {
+        ...(prev[deployment.id] || {}),
+        [fnName]: { ...(item.args || {}) },
+      },
+    }));
+  }, [invokeCasesByPath, caseKey]);
+
+  const deleteSavedCase = useCallback((deployment, fnName, caseId) => {
+    const key = caseKey(deployment?.path, fnName);
+    setInvokeCasesByPath((prev) => {
+      const nextList = (prev[key] || []).filter((c) => c.id !== caseId);
+      const next = { ...prev };
+      if (nextList.length === 0) delete next[key];
+      else next[key] = nextList;
+      return next;
+    });
+  }, [caseKey]);
 
   const toggleTestExpanded = useCallback((contractId) => {
     setExpandedTest((prev) => {
@@ -1010,6 +1082,10 @@ const DeployPanel = ({ treeData, fileContents }) => {
                 onCopyId={handleCopyId}
                 onInvoke={handleInvoke}
                 onArgChange={setFnArgForContract}
+                getSavedCases={savedCasesFor}
+                onSaveCase={saveCurrentArgsAsCase}
+                onApplyCase={applySavedCase}
+                onDeleteCase={deleteSavedCase}
                 onToggleTest={toggleTestExpanded}
                 onPromote={promoteToActive}
                 onTogglePinned={handleTogglePinned}
@@ -1038,7 +1114,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
 // ─── Group: one contract folder + its deployment history ────────────────────
 const DeploymentGroup = ({
   group, contracts, invokeResults, invokingFn, fnArgs, expandedTest, copiedId,
-  onCopyId, onInvoke, onArgChange, onToggleTest, onPromote, onTogglePinned, onRemove, onClearGroup, onOpenDiff,
+  onCopyId, onInvoke, onArgChange, getSavedCases, onSaveCase, onApplyCase, onDeleteCase, onToggleTest, onPromote, onTogglePinned, onRemove, onClearGroup, onOpenDiff,
 }) => {
   const [open, setOpen] = useState(true);
   const active = group.deployments.find((d) => d.status === "active") || group.deployments[0];
@@ -1076,6 +1152,10 @@ const DeploymentGroup = ({
             onToggleTest={onToggleTest}
             onInvoke={onInvoke}
             onArgChange={onArgChange}
+            getSavedCases={getSavedCases}
+            onSaveCase={onSaveCase}
+            onApplyCase={onApplyCase}
+            onDeleteCase={onDeleteCase}
             onRemove={onRemove}
           />
           {previous.length > 0 && (
@@ -1107,7 +1187,7 @@ const DeploymentGroup = ({
 // ─── Active deployment card (the headline entry for a group) ───────────────
 const ActiveDeployment = ({
   deployment, copiedId, onCopyId, invokeResults, invokingFn, fnArgs, expanded,
-  onToggleTest, onInvoke, onArgChange, onTogglePinned, onRemove,
+  onToggleTest, onInvoke, onArgChange, getSavedCases, onSaveCase, onApplyCase, onDeleteCase, onTogglePinned, onRemove,
 }) => {
   const fns = deployment.functions || [];
   const readFns  = fns.filter((f) => f.category === "read");
@@ -1182,6 +1262,10 @@ const ActiveDeployment = ({
                   result={invokeResults[deployment.id]?.[fn.name]}
                   onInvoke={onInvoke}
                   onArgChange={onArgChange}
+                  savedCases={getSavedCases(deployment, fn.name)}
+                  onSaveCase={onSaveCase}
+                  onApplyCase={onApplyCase}
+                  onDeleteCase={onDeleteCase}
                 />
               ))}
             </div>
@@ -1199,6 +1283,10 @@ const ActiveDeployment = ({
                   result={invokeResults[deployment.id]?.[fn.name]}
                   onInvoke={onInvoke}
                   onArgChange={onArgChange}
+                  savedCases={getSavedCases(deployment, fn.name)}
+                  onSaveCase={onSaveCase}
+                  onApplyCase={onApplyCase}
+                  onDeleteCase={onDeleteCase}
                 />
               ))}
             </div>
@@ -1216,6 +1304,10 @@ const ActiveDeployment = ({
                   result={invokeResults[deployment.id]?.[fn.name]}
                   onInvoke={onInvoke}
                   onArgChange={onArgChange}
+                  savedCases={getSavedCases(deployment, fn.name)}
+                  onSaveCase={onSaveCase}
+                  onApplyCase={onApplyCase}
+                  onDeleteCase={onDeleteCase}
                 />
               ))}
             </div>
@@ -1340,7 +1432,11 @@ const DeploymentDiffModal = ({ newer, older, onClose }) => {
 };
 
 // ─── Single function invoke card ────────────────────────────────────────────
-const FnCard = ({ fn, deployment, args, invoking, result, onInvoke, onArgChange }) => {
+const FnCard = ({
+  fn, deployment, args, invoking, result, savedCases = [],
+  onInvoke, onArgChange, onSaveCase, onApplyCase, onDeleteCase,
+}) => {
+  const [selectedCaseId, setSelectedCaseId] = useState("");
   const params = fn.params || [];
   const resultValue = result?.output
     ? result.output.split("\n").filter(l => l.trim() && !l.startsWith("ℹ") && !l.startsWith("❌") && !l.startsWith("✅")).pop()?.trim()
@@ -1360,6 +1456,70 @@ const FnCard = ({ fn, deployment, args, invoking, result, onInvoke, onArgChange 
           />
         </div>
       ))}
+      <div className="deploy-testcase-block">
+        <div className="deploy-testcase-header">
+          <span className="deploy-testcase-title">Saved test cases</span>
+          <span className="deploy-testcase-count">{savedCases.length}</span>
+        </div>
+        <div className="deploy-testcase-row">
+          <select
+            className="deploy-input deploy-testcase-select"
+            value={selectedCaseId}
+            onChange={(e) => setSelectedCaseId(e.target.value)}
+          >
+            <option value="">Select test case...</option>
+            {savedCases.map((c) => (
+              <option key={c.id} value={c.id}>{c.label}</option>
+            ))}
+          </select>
+          <button
+            className="deploy-btn deploy-btn-secondary deploy-btn-small"
+            type="button"
+            disabled={!selectedCaseId}
+            onClick={() => {
+              onApplyCase(deployment, fn.name, selectedCaseId);
+              setSelectedCaseId("");
+            }}
+          >
+            Load
+          </button>
+          <button
+            className="deploy-btn deploy-btn-secondary deploy-btn-small"
+            type="button"
+            onClick={() => onSaveCase(deployment, fn)}
+          >
+            Save
+          </button>
+        </div>
+      </div>
+      {savedCases.length > 0 && (
+        <div className="deploy-testcase-list">
+          {savedCases.slice(0, 4).map((c) => (
+            <button
+              key={c.id}
+              className="deploy-testcase-chip"
+              type="button"
+              onClick={() => onApplyCase(deployment, fn.name, c.id)}
+              title={`Load ${c.label}`}
+            >
+              {c.label}
+              <span
+                className="deploy-testcase-chip-x"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteCase(deployment, fn.name, c.id);
+                }}
+                title="Delete case"
+              >
+                ×
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      {savedCases.length === 0 && (
+        <div className="deploy-hint">No saved test cases yet. Fill args and click Save.</div>
+      )}
       <button className="deploy-btn deploy-btn-invoke" onClick={() => onInvoke(deployment, fn)} disabled={invoking}>
         {invoking ? <Loader size={11} className="spin" /> : <Play size={11} />}
         {invoking ? "Calling…" : "Call"}

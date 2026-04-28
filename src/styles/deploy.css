@@ -323,6 +323,70 @@
 .deploy-fn-result.success { background: rgba(34,197,94,0.1);  color: #22c55e; }
 .deploy-fn-result.error   { background: rgba(239,68,68,0.1);  color: #ef4444; }
 
+.deploy-testcase-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.deploy-testcase-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.deploy-testcase-title {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+.deploy-testcase-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 2px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+}
+.deploy-testcase-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 6px;
+}
+.deploy-testcase-select {
+  min-width: 0;
+}
+.deploy-testcase-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.deploy-testcase-chip {
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.deploy-testcase-chip:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+.deploy-testcase-chip-x {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .deploy-testcase-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ─── Validation Panel ─────────────────────────────────────────────────────── */
 
 .val-toolbar {
