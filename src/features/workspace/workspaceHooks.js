@@ -5,7 +5,7 @@
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { loadState, saveStateSection, clearState } from "../../utils/storage";
-import { uniqueId, addNodeToTree, removeNodeFromTree, renameNodeInTree, moveNodeInTree, collectFileIds, collectAllIds, cloneNodeWithNewIds, collectContentsMap, flattenTree } from "./workspaceUtils";
+import { uniqueId, addNodeToTree, removeNodeFromTree, renameNodeInTree, moveNodeInTree, collectFileIds, collectAllIds, cloneNodeWithNewIds, collectContentsMap, flattenTree, getNodeFromTree } from "./workspaceUtils";
 import { createDefaultWorkspace, createBlankWorkspace } from "./workspaceTemplates";
 import { cloneRepository } from "../../services/githubService";
 
@@ -106,8 +106,28 @@ export const useWorkspaceState = () => {
 
   const renameItem = useCallback((nodeId, newName) => {
     if (!newName) return;
-    setTreeData((prev) => renameNodeInTree(prev, nodeId, newName));
-  }, []);
+    setTreeData((prev) => {
+      const node = getNodeFromTree(prev, nodeId);
+      // When renaming a folder, update the package name in any child Cargo.toml
+      if (node?.type === 'folder' && node.children?.length) {
+        const cargoToml = node.children.find((c) => c.type === 'file' && c.name === 'Cargo.toml');
+        if (cargoToml) {
+          setFileContents((prevContents) => {
+            const content = prevContents[cargoToml.id];
+            if (!content) return prevContents;
+            // Replace the package name field in Cargo.toml
+            const updated = content.replace(
+              /^(name\s*=\s*")([^"]*)(")$/m,
+              `$1${newName}$3`
+            );
+            if (updated === content) return prevContents;
+            return { ...prevContents, [cargoToml.id]: updated };
+          });
+        }
+      }
+      return renameNodeInTree(prev, nodeId, newName);
+    });
+  }, [setFileContents]);
 
   const moveItem = useCallback(
     (nodeId, targetParentId) => {

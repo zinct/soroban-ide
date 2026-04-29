@@ -272,15 +272,21 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
       const className = type === "error" ? "error" : type === "command" ? "command" : "output";
       setHistory(prev => [...prev, { type: className, content, cwd: entryCwd || "~/project" }]);
     };
+    const handleBusy = () => setIsRunning(true);
+    const handleIdle = () => setIsRunning(false);
     window.addEventListener("soroban:toggleTerminal", handleToggle);
     window.addEventListener("soroban:clearTerminal", handleClear);
     window.addEventListener("soroban:runCommand", handleRunCommand);
     window.addEventListener("soroban:terminalAppend", handleAppend);
+    window.addEventListener("soroban:terminalBusy", handleBusy);
+    window.addEventListener("soroban:terminalIdle", handleIdle);
     return () => {
       window.removeEventListener("soroban:toggleTerminal", handleToggle);
       window.removeEventListener("soroban:clearTerminal", handleClear);
       window.removeEventListener("soroban:runCommand", handleRunCommand);
       window.removeEventListener("soroban:terminalAppend", handleAppend);
+      window.removeEventListener("soroban:terminalBusy", handleBusy);
+      window.removeEventListener("soroban:terminalIdle", handleIdle);
     };
   }, [toggleCollapse, isCollapsed, executeBackendCommand]);
 

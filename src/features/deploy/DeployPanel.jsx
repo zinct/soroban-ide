@@ -312,6 +312,19 @@ const DeployPanel = ({ treeData, fileContents }) => {
     return bucket.find((r) => r.status === "active") || bucket[0];
   }, [deploymentHistory, selectedContract]);
 
+  // Reset compile/deploy status when the contract folder name changes
+  // (e.g. after a rename). The compiled .wasm filename is derived from
+  // the folder name, so the old build artifact no longer matches.
+  const prevContractNameRef = useRef(contractFolderName());
+  useEffect(() => {
+    const current = contractFolderName();
+    if (prevContractNameRef.current && current && current !== prevContractNameRef.current) {
+      setCompileStatus(null);
+      setDeployStatus(null);
+    }
+    prevContractNameRef.current = current;
+  }, [contractFolderName]);
+
   // ─── Wallet ───────────────────────────────────────────────────────────────
 
   const handleInitWallet = useCallback(async () => {
@@ -332,6 +345,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
   const handleCompile = useCallback(async () => {
     if (!selectedContract) return;
     setCompileStatus("running");
+    window.dispatchEvent(new Event("soroban:terminalBusy"));
     const files = collectProjectFiles(treeData, fileContents);
     const cmd = `stellar contract build${manifestPathFlag(selectedContract)}`;
     try {
@@ -346,15 +360,17 @@ const DeployPanel = ({ treeData, fileContents }) => {
             detail: { type: msg.type === "error" ? "error" : "output", content: msg.content }
           }));
         },
-        onError: () => { setCompileStatus("error"); cleanup?.(); },
+        onError: () => { setCompileStatus("error"); window.dispatchEvent(new Event("soroban:terminalIdle")); cleanup?.(); },
         onDone: async () => {
           setCompileStatus("success");
+          window.dispatchEvent(new Event("soroban:terminalIdle"));
           cleanup();
         },
         onClose: () => {},
       });
     } catch (err) {
       setCompileStatus("error");
+      window.dispatchEvent(new Event("soroban:terminalIdle"));
       window.dispatchEvent(new CustomEvent("soroban:terminalAppend", {
         detail: { type: "error", content: err.message }
       }));
@@ -378,6 +394,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
   const executeDeploy = useCallback(async () => {
     if (!selectedContract) return;
     setDeployStatus("running");
+    window.dispatchEvent(new Event("soroban:terminalBusy"));
     const files = collectProjectFiles(treeData, fileContents);
     const wasmPath = resolveWasmPath(selectedContract, fileContents);
     if (!wasmPath) {
@@ -469,8 +486,9 @@ const DeployPanel = ({ treeData, fileContents }) => {
             detail: { type: msg.type === "error" ? "error" : "output", content: msg.content }
           }));
         },
-        onError: () => { setDeployStatus("error"); cleanup?.(); },
+        onError: () => { setDeployStatus("error"); window.dispatchEvent(new Event("soroban:terminalIdle")); cleanup?.(); },
         onDone: async () => {
+          window.dispatchEvent(new Event("soroban:terminalIdle"));
           if (useFreighter) {
             // Extract XDR: stellar --build-only prints the assembled XDR as the last
             // stdout line. It's a base64 string (only A-Z, a-z, 0-9, +, /, =).
@@ -521,6 +539,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
       });
     } catch (err) {
       setDeployStatus("error");
+      window.dispatchEvent(new Event("soroban:terminalIdle"));
       window.dispatchEvent(new CustomEvent("soroban:terminalAppend", {
         detail: { type: "error", content: err.message }
       }));
@@ -777,7 +796,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
               </div>
               <div className="deploy-wallet-card-addr">
                 <span>{defaultWallet.address ? `${defaultWallet.address.slice(0,6)}…${defaultWallet.address.slice(-4)}` : ""}</span>
-                <button className="deploy-icon-btn" onClick={() => navigator.clipboard.writeText(defaultWallet.address)}><Copy size={11} /></button>
+                <button className="deploy-icon-btn" onClick={() => { navigator.clipboard.writeText(defaultWallet.address); setCopiedDefault(true); setTimeout(() => setCopiedDefault(false), 2000); }}>{copiedDefault ? <Check size={11} /> : <Copy size={11} />}</button>
               </div>
               {defaultWallet.balance && (
                 <div className="deploy-wallet-card-balance">
@@ -815,7 +834,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
               </div>
               <div className="deploy-wallet-card-addr">
                 <span>{`${walletAddress.slice(0,6)}…${walletAddress.slice(-4)}`}</span>
-                <button className="deploy-icon-btn" onClick={() => navigator.clipboard.writeText(walletAddress)}><Copy size={11} /></button>
+                <button className="deploy-icon-btn" onClick={() => { navigator.clipboard.writeText(walletAddress); setCopiedFreighter(true); setTimeout(() => setCopiedFreighter(false), 2000); }}>{copiedFreighter ? <Check size={11} /> : <Copy size={11} />}</button>
               </div>
               {freighterBalance && (
                 <div className="deploy-wallet-card-balance">
