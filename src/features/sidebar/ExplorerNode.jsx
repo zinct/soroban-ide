@@ -254,7 +254,7 @@ const ExplorerNode = memo(({ node, depth, tree, expandedFolders, onToggleFolder,
             {isFolder && (isExpanded ? <ChevronDown /> : <ChevronRight />)}
           </span>
           <span className="sidebar-node-icon">
-            <FolderIconImg folderName={node.name} isOpen={isExpanded} size={18} />
+            <FolderIconImg folderName={node.name} isOpen={isExpanded} />
           </span>
           <span className={`sidebar-node-label ${isCut ? "cut-label" : ""}`}>{node.name}</span>
         </button>
@@ -348,7 +348,7 @@ const ExplorerNode = memo(({ node, depth, tree, expandedFolders, onToggleFolder,
       }}
       {...sharedProps}>
       <span className="sidebar-node-icon">
-        <FileIconImg filename={node.name} size={18} />
+        <FileIconImg filename={node.name} />
       </span>
       <span className={`sidebar-node-label ${isCut ? "cut-label" : ""}`}>{node.name}</span>
     </button>

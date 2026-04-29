@@ -76,9 +76,9 @@ export const collectProjectFiles = (treeData, fileContents, options = {}) => {
           if (content !== undefined) {
             files[filePath] = content;
           }
-        } else {
-          console.warn(`[backendService] Skipping non-source file: ${filePath}`);
         }
+        // Silently skip non-source files (binaries, PDFs, lockfiles, etc.) —
+        // they're expected and the noise drowns out real warnings.
       }
 
       if (node.children?.length) {
@@ -191,12 +191,17 @@ export const registerFreighterWallet = async (address) => {
 
 // ─── Contract Interface ───────────────────────────────────────────────────────
 
-/** POST /api/contract/interface — parse pub fn signatures from files */
-export const getContractInterface = async (files) => {
+/**
+ * POST /api/contract/interface — parse pub fn signatures from files.
+ * Pass `contractPath` (e.g. "learning/hello-world") to scope parsing to a
+ * single crate; otherwise the backend scans every lib.rs in the workspace
+ * and you get a mashup of unrelated functions.
+ */
+export const getContractInterface = async (files, contractPath = "") => {
   const res = await fetch(`${API_BASE}/contract/interface`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ files }),
+    body: JSON.stringify({ files, contract_path: contractPath }),
   });
   if (!res.ok) throw new Error("Failed to parse contract interface");
   return res.json(); // { functions: ContractFn[] }

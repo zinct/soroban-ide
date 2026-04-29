@@ -68,7 +68,12 @@ Build, test, and deploy Rust smart contracts on the Stellar network — without 
 - **Integrated terminal** that streams `stellar` CLI output from the backend over WebSocket, plus local commands (`ls`, `cd`, `clear`, …).
 - **One-click project templates** — `hello-world` contract and the `stellar-workshop` starter.
 - **GitHub integration** — OAuth sign-in and clone of public repositories into the workspace.
-- **Freighter wallet client** — interact with deployed contracts from the Interact panel.
+- **Contract Selector in Deploy panel** — auto-discovers `Cargo.toml` projects, persists selection, and scopes build/deploy to the selected contract.
+- **Deploy timeline (multi-contract history)** — grouped deploy history with timestamps, active/previous states, inline Explorer links, and one-click re-activate.
+- **Deploy timeline controls** — search by alias/ID/path, filter by wallet/network/contract, pin favorites, and compare deployment diffs (metadata + function set).
+- **Inline contract testing from deploy history** — invoke read/write functions directly from each deployed contract card.
+- **Freighter wallet integration** — connect, deploy with Freighter signing flow, and interact with deployed contracts.
+- **Improved Freighter diagnostics** — clearer sign/submit/on-chain error stages with decoded transaction result codes.
 - **Command Palette & Quick Open** — `Cmd/Ctrl+Shift+P` and `Cmd/Ctrl+P`.
 - **Built-in tutorials** to guide new Soroban developers end-to-end.
 - **Themes** — Community Dark and Modern Light.
@@ -87,6 +92,7 @@ Build, test, and deploy Rust smart contracts on the Stellar network — without 
 | Wallet      | [Freighter](https://www.freighter.app/)                               |
 | Backend     | Go service (separate repo) exposed at `/api` — WebSocket build streaming |
 | Contracts   | [Soroban SDK](https://developers.stellar.org/docs/build/smart-contracts/getting-started/setup) (Rust) |
+| Deploy UX   | Multi-contract deploy history, filters, pinning, diff modal, inline invoke |
 
 ---
 
@@ -160,6 +166,7 @@ soroban-ide/
 │   ├── features/
 │   │   ├── editor/         # Monaco wrapper + language utils
 │   │   ├── github/         # GitHub OAuth + clone panel
+│   │   ├── deploy/         # Build/deploy flow, contract discovery, deploy timeline
 │   │   ├── interact/       # Freighter-based contract interaction
 │   │   ├── palette/        # Command Palette + Quick Open
 │   │   ├── settings/       # Theme and editor settings

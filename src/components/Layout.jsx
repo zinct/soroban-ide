@@ -16,7 +16,9 @@ import Terminal from "../features/terminal/Terminal";
 import { getLanguageFromName, getLanguageDisplayName } from "../features/editor/editorUtils";
 import { cloneNodeWithNewIds, addNodeToTree, moveNodeInTree } from "../features/workspace/workspaceUtils";
 import SettingsPanel from "../features/settings/SettingsPanel";
+import AIPanel from "../features/ai/AIPanel";
 import CommandPalette from "../features/palette/CommandPalette";
+import { Sparkles } from "lucide-react";
 import "../styles/settings.css";
 
 /**
@@ -38,6 +40,7 @@ const Layout = () => {
   const initializationStartedRef = useRef(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
+  const [showAIPanel, setShowAIPanel] = useState(() => localStorage.getItem("ai_panel_open") === "true");
   const [palette, setPalette] = useState({ isOpen: false, mode: "command" });
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
@@ -69,6 +72,11 @@ const Layout = () => {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
+  // Persist AI Panel state
+  useEffect(() => {
+    localStorage.setItem("ai_panel_open", showAIPanel);
+  }, [showAIPanel]);
+
   // Derived state
   const activeFile = tabManager.activeFileId ? workspace.flattenedNodes.get(tabManager.activeFileId) : null;
   const activeContent = tabManager.activeFileId ? workspace.fileContents[tabManager.activeFileId] : "";
@@ -84,6 +92,19 @@ const Layout = () => {
     },
     [workspace, tabManager],
   );
+
+  // Handle body scroll blocking for all modals
+  useEffect(() => {
+    const isAnyModalOpen = palette.isOpen || showGithubClone || confirmModal.isOpen || isSettingsOpen;
+    if (isAnyModalOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [palette.isOpen, showGithubClone, confirmModal.isOpen, isSettingsOpen]);
 
   // Handle delete with tab cleanup
   const handleDeleteItem = useCallback(
@@ -310,8 +331,7 @@ const Layout = () => {
   const modKey = isMac ? "⌘" : "Ctrl";
 
   const paletteCommands = useMemo(() => {
-    const dispatch = (name, detail) =>
-      window.dispatchEvent(new CustomEvent(name, detail ? { detail } : undefined));
+    const dispatch = (name, detail) => window.dispatchEvent(new CustomEvent(name, detail ? { detail } : undefined));
 
     return [
       {
@@ -405,6 +425,13 @@ const Layout = () => {
         run: () => setIsSettingsOpen((v) => !v),
       },
       {
+        id: "view.toggleAI",
+        title: showAIPanel ? "Close AI Panel" : "Open AI Panel",
+        category: "View",
+        shortcut: `${modKey}+I`,
+        run: () => setShowAIPanel((v) => !v),
+      },
+      {
         id: "terminal.clear",
         title: "Clear Terminal",
         category: "Terminal",
@@ -442,16 +469,7 @@ const Layout = () => {
         run: () => setTheme("light"),
       },
     ];
-  }, [
-    openPalette,
-    handleCreateProject,
-    handleOpenGithubClone,
-    isSettingsOpen,
-    workspace.collapseAll,
-    tabManager,
-    handleCloseAllTabs,
-    modKey,
-  ]);
+  }, [openPalette, handleCreateProject, handleOpenGithubClone, isSettingsOpen, showAIPanel, workspace.collapseAll, tabManager, handleCloseAllTabs, modKey]);
 
   const handlePaletteOpenFile = useCallback(
     (fileId) => {
@@ -478,7 +496,6 @@ const Layout = () => {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [openPalette]);
-
 
   return (
     <div className="app-shell">
@@ -532,12 +549,15 @@ const Layout = () => {
                 <Tabs tabs={tabManager.tabs} activeFileId={tabManager.activeFileId} previewTabId={tabManager.previewTabId} files={workspace.flattenedNodes} onTabSelect={tabManager.setActiveFileId} onTabClose={tabManager.closeTab} />
 
                 <div className="create-new-container" ref={createMenuRef}>
-                  <button className="create-new-btn" onClick={() => setShowCreateMenu(!showCreateMenu)} title="Create New...">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <line x1="12" y1="5" x2="12" y2="19" />
-                      <line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                    <span className="create-new-label">Create Project</span>
+                  <button className="premium-create-btn" onClick={() => setShowCreateMenu(!showCreateMenu)} title="Create New...">
+                    <span className="btn-label">Create Project</span>
+                  </button>
+                  <button 
+                    className={`ai-toggle-btn ${showAIPanel ? 'hidden' : ''}`} 
+                    onClick={() => setShowAIPanel(true)}
+                    title="Toggle AI Chat"
+                  >
+                    <Sparkles size={20} />
                   </button>
                   {showCreateMenu && (
                     <div className="create-new-dropdown">
@@ -582,6 +602,8 @@ const Layout = () => {
 
               <Terminal activeFileName={activeFile?.path} treeData={workspace.treeData} fileContents={workspace.fileContents} onFileTreeUpdate={workspace.setTreeData} />
             </div>
+
+            <AIPanel isOpen={showAIPanel} onClose={() => setShowAIPanel(false)} />
           </>
         )}
       </div>
@@ -600,7 +622,7 @@ const Layout = () => {
         </div>
       </div>
 
-      <div className={`github-clone-overlay ${showGithubClone ? "visible" : ""}`}>
+      <div className={`github-clone-overlay ${showGithubClone ? "visible" : ""}`} onClick={(e) => e.target === e.currentTarget && setShowGithubClone(false)}>
         <div className="github-clone-dialog">
           <h3>Clone GitHub Repository</h3>
           <input
@@ -626,16 +648,9 @@ const Layout = () => {
         </div>
       </div>
 
-      <CommandPalette
-        isOpen={palette.isOpen}
-        mode={palette.mode}
-        commands={paletteCommands}
-        files={paletteFiles}
-        onClose={closePalette}
-        onOpenFile={handlePaletteOpenFile}
-      />
+      <CommandPalette isOpen={palette.isOpen} mode={palette.mode} commands={paletteCommands} files={paletteFiles} onClose={closePalette} onOpenFile={handlePaletteOpenFile} />
 
-      <div className={`github-clone-overlay ${confirmModal.isOpen ? "visible" : ""}`}>
+      <div className={`github-clone-overlay ${confirmModal.isOpen ? "visible" : ""}`} onClick={(e) => e.target === e.currentTarget && setConfirmModal({ ...confirmModal, isOpen: false })}>
         <div className="github-clone-dialog">
           <h3>{confirmModal.title}</h3>
           <p className="confirmation-message">{confirmModal.message}</p>

@@ -2,6 +2,25 @@ import React, { memo, useState, useCallback, useEffect, useRef } from "react";
 import { getStoredToken, getStoredUser, storeAuth, clearAuth, initiateDeviceFlow, pollForToken, getUserInfo, listUserRepos, createRepository, pushFilesToRepo } from "../../services/githubAuthService";
 import { collectProjectFiles } from "../../services/backendService";
 
+// ─── Commit message config ──────────────────────────────────────
+const COMMIT_MESSAGE_KEY = "soroban:lastCommitMessage";
+const DEFAULT_CREATE_COMMIT = "Initial commit from soroban studio";
+const DEFAULT_UPDATE_COMMIT = "Update from soroban studio";
+const COMMIT_SUBJECT_SOFT_LIMIT = 72;
+
+/**
+ * Build the final commit message sent to GitHub.
+ * If the user typed something, we respect it verbatim. Otherwise we fall
+ * back to the action-specific default (which already carries branding).
+ */
+const buildCommitMessage = (raw, fallback) => {
+  const effective = raw.trim() || fallback;
+  const lines = effective.split(/\r?\n/);
+  const subject = (lines[0] || "").trim();
+  const body = lines.slice(1).join("\n").trim();
+  return body ? `${subject}\n\n${body}` : subject;
+};
+
 /**
  * GitHub Panel — replaces the file explorer in the sidebar.
  * Handles OAuth Device Flow login, repo creation, and pushing files.
@@ -31,6 +50,33 @@ const GitHubPanel = memo(({ treeData, fileContents, onConfirm }) => {
   const [pushProgress, setPushProgress] = useState(null);
   const [pushResult, setPushResult] = useState(null);
   const [pushError, setPushError] = useState(null);
+
+  // Commit message (shared across create/existing views; prefilled from last use)
+  const [commitMessage, setCommitMessage] = useState(() => {
+    try {
+      return localStorage.getItem(COMMIT_MESSAGE_KEY) || "";
+    } catch {
+      return "";
+    }
+  });
+
+  const commitMessageDefault = activeView === "create" ? DEFAULT_CREATE_COMMIT : DEFAULT_UPDATE_COMMIT;
+  const commitSubjectLine = (commitMessage.split(/\r?\n/)[0] || "").trim();
+  const hasTypedCommit = commitMessage.length > 0;
+  // Disable the push action only if the user actively typed a message whose subject is empty.
+  // An empty textarea is allowed — it falls back to the action-specific default on submit.
+  const commitSubjectEmpty = hasTypedCommit && commitSubjectLine.length === 0;
+  const commitSubjectTooLong = commitSubjectLine.length > COMMIT_SUBJECT_SOFT_LIMIT;
+
+  const persistCommitMessage = useCallback(() => {
+    try {
+      if (commitMessage.trim()) {
+        localStorage.setItem(COMMIT_MESSAGE_KEY, commitMessage);
+      }
+    } catch {
+      /* localStorage unavailable — non-fatal */
+    }
+  }, [commitMessage]);
 
   // Verify stored token on mount
   useEffect(() => {
@@ -133,6 +179,9 @@ const GitHubPanel = memo(({ treeData, fileContents, onConfirm }) => {
 
   const handleCreateRepo = useCallback(async () => {
     if (!newRepoName.trim() || !token) return;
+    if (commitSubjectEmpty) return;
+
+    const finalMessage = buildCommitMessage(commitMessage, DEFAULT_CREATE_COMMIT);
 
     const execute = async () => {
       setIsPushing(true);
@@ -145,11 +194,12 @@ const GitHubPanel = memo(({ treeData, fileContents, onConfirm }) => {
         setPushProgress({ step: 1, total: 6, detail: "Repository created! Pushing files..." });
 
         const files = collectProjectFiles(treeData, fileContents, { includeAll: true });
-        const result = await pushFilesToRepo(token, repo.owner.login, repo.name, files, "Initial commit from soroban studio | https://soroban.studio", (step, total, detail) => setPushProgress({ step: step + 1, total: total + 1, detail }), repo.default_branch || "main");
+        const result = await pushFilesToRepo(token, repo.owner.login, repo.name, files, finalMessage, (step, total, detail) => setPushProgress({ step: step + 1, total: total + 1, detail }), repo.default_branch || "main");
 
         setPushResult({ ...result, repoUrl: `https://github.com/${repo.full_name}` });
         setNewRepoName("");
         setNewRepoDesc("");
+        persistCommitMessage();
       } catch (err) {
         setPushError(err.message);
       } finally {
@@ -168,11 +218,14 @@ const GitHubPanel = memo(({ treeData, fileContents, onConfirm }) => {
     } else {
       await execute();
     }
-  }, [token, newRepoName, newRepoDesc, treeData, fileContents, onConfirm]);
+  }, [token, newRepoName, newRepoDesc, treeData, fileContents, onConfirm, commitMessage, commitSubjectEmpty, persistCommitMessage]);
 
   const handlePushToExisting = useCallback(
     async (repo) => {
       if (!token) return;
+      if (commitSubjectEmpty) return;
+
+      const finalMessage = buildCommitMessage(commitMessage, DEFAULT_UPDATE_COMMIT);
 
       const execute = async () => {
         setIsPushing(true);
@@ -187,13 +240,14 @@ const GitHubPanel = memo(({ treeData, fileContents, onConfirm }) => {
             repo.owner.login,
             repo.name,
             files,
-            "Update from soroban studio | https://soroban.studio",
+            finalMessage,
             (step, total, detail) => setPushProgress({ step, total, detail }),
             repo.default_branch || "main",
             true, // force push
           );
 
           setPushResult(result);
+          persistCommitMessage();
         } catch (err) {
           setPushError(err.message);
         } finally {
@@ -213,7 +267,7 @@ const GitHubPanel = memo(({ treeData, fileContents, onConfirm }) => {
         await execute();
       }
     },
-    [token, treeData, fileContents, onConfirm],
+    [token, treeData, fileContents, onConfirm, commitMessage, commitSubjectEmpty, persistCommitMessage],
   );
 
   // ─── Filtered repos ─────────────────────────────────────────
@@ -227,6 +281,43 @@ const GitHubPanel = memo(({ treeData, fileContents, onConfirm }) => {
       <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
     </svg>
   );
+
+  // Commit-message editor shared by the Create and Existing views.
+  // Cmd/Ctrl+Enter fires the provided onSubmit handler (create) and is a no-op
+  // in the existing view where the user still needs to pick a repo.
+  const renderCommitMessageEditor = ({ onSubmit }) => {
+    const placeholder = `${commitMessageDefault}\n\nOptional longer description...`;
+    const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.platform || "");
+    const shortcutHint = isMac ? "⌘⏎" : "Ctrl+Enter";
+
+    return (
+      <div className="github-form-group">
+        <label className="github-form-label">
+          Commit Message
+          {commitSubjectEmpty && <span className="github-form-label-warn">Subject required</span>}
+          {!commitSubjectEmpty && commitSubjectTooLong && <span className="github-form-label-warn">Subject over {COMMIT_SUBJECT_SOFT_LIMIT} chars</span>}
+        </label>
+        <textarea
+          className="github-form-input github-commit-textarea"
+          value={commitMessage}
+          onChange={(e) => setCommitMessage(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && typeof onSubmit === "function") {
+              e.preventDefault();
+              onSubmit();
+            }
+          }}
+          placeholder={placeholder}
+          rows={4}
+          spellCheck={false}
+        />
+        <span className="github-form-hint">
+          Line 1 is the subject. Leave a blank line, then the body.
+          {onSubmit && <> Press <kbd>{shortcutHint}</kbd> to push.</>}
+        </span>
+      </div>
+    );
+  };
 
   // ─── Not Authenticated ──────────────────────────────────────
 
@@ -398,7 +489,9 @@ const GitHubPanel = memo(({ treeData, fileContents, onConfirm }) => {
               <input className="github-form-input" type="text" value={newRepoDesc} onChange={(e) => setNewRepoDesc(e.target.value)} placeholder="A Soroban smart contract" />
             </div>
 
-            <button className="btn btn-primary btn-block btn-lg" disabled={!newRepoName.trim()} onClick={handleCreateRepo} style={{ marginTop: "8px" }}>
+            {renderCommitMessageEditor({ onSubmit: handleCreateRepo })}
+
+            <button className="btn btn-primary btn-block btn-lg" disabled={!newRepoName.trim() || commitSubjectEmpty} onClick={handleCreateRepo} style={{ marginTop: "8px" }}>
               Create & Push
             </button>
           </div>
@@ -423,6 +516,8 @@ const GitHubPanel = memo(({ treeData, fileContents, onConfirm }) => {
 
             {pushError && <div className="github-error">{pushError}</div>}
 
+            {renderCommitMessageEditor({ onSubmit: null })}
+
             <input className="github-form-input github-search-input" type="text" value={repoSearch} onChange={(e) => setRepoSearch(e.target.value)} placeholder="Search repositories..." />
 
             {reposLoading ? (
@@ -433,7 +528,12 @@ const GitHubPanel = memo(({ treeData, fileContents, onConfirm }) => {
             ) : (
               <div className="github-repo-list">
                 {filteredRepos.map((repo) => (
-                  <button key={repo.id} className="github-repo-item" onClick={() => handlePushToExisting(repo)}>
+                  <button
+                    key={repo.id}
+                    className="github-repo-item"
+                    disabled={commitSubjectEmpty}
+                    title={commitSubjectEmpty ? "Enter a commit subject to push" : `Push to ${repo.full_name}`}
+                    onClick={() => handlePushToExisting(repo)}>
                     <div className="github-repo-info">
                       <span className="github-repo-name">{repo.name}</span>
                       <span className="github-repo-owner">{repo.full_name}</span>

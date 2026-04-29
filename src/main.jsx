@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { Analytics } from "@vercel/analytics/react";
 import App from './App';
 
 /* Styles — split by feature */
@@ -14,4 +15,9 @@ import './styles/github.css';
 import './styles/palette.css';
 import './styles/deploy.css';
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+    <Analytics />
+  </React.StrictMode>
+);

@@ -63,9 +63,13 @@ export const connectFreighter = async () => {
   }
 };
 
-export const signFreighterTransaction = async (xdr) => {
+export const signFreighterTransaction = async (xdr, address) => {
+  // Pass `address` so Freighter signs with the exact account the IDE has
+  // recorded — avoids signing with a different account when the user has
+  // multiple in the extension.
   const result = await signTransaction(xdr, {
     networkPassphrase: TESTNET_PASSPHRASE,
+    ...(address ? { address } : {}),
   });
   // Freighter returns { signedTxXdr, error } or throws
   if (result?.error) {
@@ -73,6 +77,46 @@ export const signFreighterTransaction = async (xdr) => {
     throw new Error(msg);
   }
   return result?.signedTxXdr ?? result;
+};
+
+// Stellar TransactionResultCode → human-readable. Keeps deploy errors
+// debuggable instead of leaving the user with a base64 blob.
+const TX_RESULT_CODES = {
+  0: "txSuccess",
+  [-1]: "txFailed",
+  [-2]: "txTooEarly",
+  [-3]: "txTooLate",
+  [-4]: "txMissingOperation",
+  [-5]: "txBadSeq (sequence number mismatch — account state changed mid-deploy)",
+  [-6]: "txBadAuth (signature didn't match transaction source)",
+  [-7]: "txInsufficientBalance",
+  [-8]: "txNoAccount (source account not found on the network)",
+  [-9]: "txInsufficientFee",
+  [-10]: "txBadAuthExtra",
+  [-11]: "txInternalError",
+  [-12]: "txNotSupported",
+  [-13]: "txFeeBumpInnerFailed",
+  [-14]: "txBadSponsorship",
+  [-15]: "txBadMinSeqAgeOrGap",
+  [-16]: "txMalformed",
+  [-17]: "txSorobanInvalid",
+};
+
+/**
+ * Best-effort decode of a Stellar TransactionResult XDR (base64) into a
+ * useful one-liner. Returns the original base64 if decode fails so the
+ * user always gets *something* to grep for.
+ */
+export const decodeErrorResultXdr = (b64) => {
+  if (!b64) return "unknown error";
+  try {
+    const result = StellarXdr.TransactionResult.fromXDR(b64, "base64");
+    const code = result.result().switch().value;
+    const label = TX_RESULT_CODES[code];
+    return label ? `${label} (code ${code})` : `txResultCode ${code}`;
+  } catch {
+    return b64;
+  }
 };
 
 const SOROBAN_RPC = "https://soroban-testnet.stellar.org";
@@ -88,39 +132,67 @@ async function rpc(method, params) {
   return d.result;
 }
 
+async function getAccountSequence(address) {
+  // Prefer Soroban RPC's account view to avoid Horizon lag causing stale
+  // sequence reads during quick sign+submit loops.
+  try {
+    const acc = await rpc("getAccount", { address });
+    const seq = acc?.seqNum ?? acc?.sequence;
+    if (seq != null) return BigInt(seq);
+  } catch {
+    // Fallback to Horizon below.
+  }
+
+  const accountResp = await fetch(`https://horizon-testnet.stellar.org/accounts/${address}`);
+  if (!accountResp.ok) {
+    throw new Error("Freighter account not found on testnet. Fund it first via Friendbot.");
+  }
+  const { sequence } = await accountResp.json();
+  return BigInt(sequence);
+}
+
 /**
  * Sign an already-assembled XDR (e.g. from `stellar contract deploy --build-only`)
  * with Freighter and submit it directly via Soroban RPC.
  *
- * The CLI builds the tx with the default (server-side) key as source.
- * We replace the source account with the Freighter address and re-fetch
- * the sequence number so Freighter can sign it as the true sender.
+ * The CLI's --build-only outputs an unsigned tx with `--source freighter-wallet`
+ * already as source, but without sorobanData/auth (which require simulation)
+ * and with whatever sequence number the CLI saw at build time. We:
+ *
+ *   1. simulate to get sorobanData / minResourceFee / auth entries
+ *   2. fetch the current sequence from Horizon and set seq = current + 1
+ *   3. inject all of the above into the envelope
+ *   4. sign with Freighter (passing the explicit address)
+ *   5. submit via Soroban RPC and poll for confirmation
+ *
+ * Auto-retries once on txBadSeq because Freighter's signing popup can take
+ * long enough that another tx from the same account lands in between fetch
+ * and submit.
  */
 export const signAndSubmitWithFreighter = async (assembledXdr, freighterAddress) => {
-  // 1. Simulate (source is already the Freighter address from CLI --source freighter-wallet)
+  return await _signAndSubmitOnce(assembledXdr, freighterAddress, /* allowRetry */ true);
+};
+
+const _signAndSubmitOnce = async (assembledXdr, freighterAddress, allowRetry) => {
   const sim = await rpc("simulateTransaction", { transaction: assembledXdr });
-  if (sim?.error) throw new Error(typeof sim.error === "string" ? sim.error : JSON.stringify(sim.error));
+  if (sim?.error) {
+    throw new Error(`Simulation failed: ${typeof sim.error === "string" ? sim.error : JSON.stringify(sim.error)}`);
+  }
 
-  // 2. Fetch current account sequence — CLI may have used a stale sequence
-  const accountResp = await fetch(`https://horizon-testnet.stellar.org/accounts/${freighterAddress}`);
-  if (!accountResp.ok) throw new Error("Freighter account not found on testnet. Fund it first.");
-  const { sequence } = await accountResp.json();
+  const sequence = await getAccountSequence(freighterAddress);
 
-  // 3. Inject sorobanData + fee + correct sequence + timeBounds
   const env = StellarXdr.TransactionEnvelope.fromXDR(assembledXdr, "base64");
   const innerTx = env.v1().tx();
   const sorobanData = StellarXdr.SorobanTransactionData.fromXDR(sim.transactionData, "base64");
   innerTx.ext(new StellarXdr.TransactionExt(1, sorobanData));
   innerTx.fee(parseInt(sim.minResourceFee) + parseInt(innerTx.fee()));
-  // Set sequence to account_sequence + 1
   const seqBuf = new Uint8Array(8);
-  new DataView(seqBuf.buffer).setBigInt64(0, BigInt(sequence) + 1n);
+  new DataView(seqBuf.buffer).setBigInt64(0, sequence + 1n);
   innerTx.seqNum(StellarXdr.SequenceNumber.fromXDR(seqBuf));
   const zeroBuf = new Uint8Array(8);
   innerTx.cond(StellarXdr.Preconditions.precondTime(
     new StellarXdr.TimeBounds({ minTime: StellarXdr.TimePoint.fromXDR(zeroBuf), maxTime: StellarXdr.TimePoint.fromXDR(zeroBuf) })
   ));
-  // Inject auth entries from simulation into the invokeHostFunction operation
   const authEntries = (sim.results?.[0]?.auth || []).map(a =>
     StellarXdr.SorobanAuthorizationEntry.fromXDR(a, "base64")
   );
@@ -129,12 +201,33 @@ export const signAndSubmitWithFreighter = async (assembledXdr, freighterAddress)
   }
   env.v1().signatures([]);
 
-  // 4. Sign with Freighter
-  const signedXdr = await signFreighterTransaction(env.toXDR("base64"));
+  let signedXdr;
+  try {
+    signedXdr = await signFreighterTransaction(env.toXDR("base64"), freighterAddress);
+  } catch (e) {
+    // User rejected, locked extension, etc. — preserve the raw message but
+    // tag it so the caller can label it accurately.
+    const err = new Error(`Freighter sign rejected: ${e.message}`);
+    err.stage = "sign";
+    throw err;
+  }
 
-  // 5. Submit and poll for contract ID
   const result = await rpc("sendTransaction", { transaction: signedXdr });
-  if (result?.status === "ERROR") throw new Error(result.errorResultXdr || "Transaction failed");
+  if (result?.status === "ERROR") {
+    const decoded = decodeErrorResultXdr(result.errorResultXdr);
+    // txBadSeq is the one we can recover from automatically — Freighter's
+    // sign popup is slow enough that another tx from this account can land
+    // between fetch and submit.
+    if (allowRetry && /txBadSeq/.test(decoded)) {
+      // Small pause gives RPC/Horizon state a chance to settle if another tx
+      // landed from the same account right before submit.
+      await new Promise((r) => setTimeout(r, 650));
+      return await _signAndSubmitOnce(assembledXdr, freighterAddress, false);
+    }
+    const err = new Error(`Transaction rejected: ${decoded}`);
+    err.stage = "submit";
+    throw err;
+  }
 
   if (result?.hash) {
     // Compute contract ID deterministically from the deployer + salt in the XDR
@@ -171,7 +264,11 @@ export const signAndSubmitWithFreighter = async (assembledXdr, freighterAddress)
       await new Promise(r => setTimeout(r, 2000));
       const tx = await rpc("getTransaction", { hash: result.hash });
       if (tx?.status === "SUCCESS") break;
-      if (tx?.status === "FAILED") throw new Error(`Transaction failed on-chain: ${tx.resultXdr || JSON.stringify(tx)}`);
+      if (tx?.status === "FAILED") {
+        const err = new Error(`Transaction failed on-chain: ${decodeErrorResultXdr(tx.resultXdr)}`);
+        err.stage = "onchain";
+        throw err;
+      }
     }
   }
   return result;

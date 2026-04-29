@@ -3,7 +3,7 @@
  * This removes the need to hardcode strings and allows for easy updates.
  * We include all files except .git metadata.
  */
-const helloWorldFiles = import.meta.glob('../../templates/hello-world/**/*', { as: 'raw', eager: true });
+const helloWorldFiles = import.meta.glob('../../templates/hello-world/**/*', { query: '?raw', import: 'default', eager: true });
 
 /**
  * Helper to build a tree and contents from a flat template object or Vite glob.

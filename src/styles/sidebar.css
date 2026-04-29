@@ -5,6 +5,7 @@
   flex-direction: row;
   height: 100%;
   position: relative;
+  z-index: 500;
 }
 
 .sidebar {
@@ -16,8 +17,9 @@
   flex-direction: row; /* Changed to horizontal */
   border-right: 1px solid var(--border-color);
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); /* Smoother, more premium transition */
-  overflow: visible;
-  z-index: 50;
+  overflow: visible; /* Changed from hidden to allow header to overflow */
+  position: relative;
+  z-index: 100;
 }
 
 .sidebar.resizing {
@@ -79,11 +81,24 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  overflow: visible;
-  transition: opacity 0.2s ease;
+  min-width: 0; 
+  overflow: visible; /* Changed from hidden to allow header to overflow */
+  transition: 
+    opacity 0.3s ease 0.1s,
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.1s;
+  opacity: 1;
+  transform: translateX(0);
 }
- 
+
+.sidebar.collapsed .sidebar-panel {
+  opacity: 0;
+  transform: translateX(-10px);
+  pointer-events: none;
+  transition: 
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
 .sidebar-panel.hidden {
   display: none;
 }
@@ -173,11 +188,13 @@
   height: var(--header-height);
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 0 12px;
   border-bottom: 1px solid var(--border-color);
   background: var(--sidebar-bg);
   overflow: visible;
+  white-space: nowrap;
+  position: relative;
+  z-index: 501;
 }
 
 .sidebar-title {
@@ -186,12 +203,18 @@
   text-transform: uppercase;
   color: var(--text-secondary);
   font-weight: 700;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 8px;
 }
 
 .sidebar-actions {
   display: flex;
   gap: 4px;
   overflow: visible;
+  flex-shrink: 0;
 }
 
 .sidebar-action {
@@ -309,8 +332,9 @@
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 4px 8px;
-  font-size: 15px;
+  padding: 6px 8px;
+  margin-bottom: 1px;
+  font-size: 17px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   text-align: left;
   transition: background 0.12s ease;
@@ -376,8 +400,7 @@
 }
 
 .sidebar-node-icon {
-  width: 22px;
-  height: 22px;
+  min-width: 22px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -386,10 +409,7 @@
 
 .sidebar-node-icon svg,
 .sidebar-node-icon img {
-  width: 100%;
-  height: 100%;
-  max-width: 22px;
-  max-height: 22px;
+  display: block;
 }
 
 .soroban-docs-icon {
@@ -635,7 +655,7 @@ html body #app .sidebar-wrapper .sidebar-body .sidebar-node .sidebar-folder.lazy
 .sidebar-body .sidebar-folder.lazy-folder.selected,
 .sidebar-body .sidebar-folder.lazy-folder.active {
   color: var(--text-muted) !important;
-  }
+}
 
 /* MOST SPECIFIC: Force lazy folder to stay dim in ALL states */
 .sidebar-wrapper .sidebar-body .sidebar-node .sidebar-folder.lazy-folder,
@@ -662,7 +682,7 @@ html body #app .sidebar-wrapper .sidebar-body .sidebar-node .sidebar-folder.lazy
 /* ULTIMATE OVERRIDE: Use attribute selector for maximum specificity */
 .sidebar-wrapper .sidebar-body .sidebar-node button[class*="lazy-folder"],
 .sidebar-wrapper .sidebar-body .sidebar-node button[class*="lazy-folder"]:hover,
-.sidebar-wrapper .sidebar-body .sidebar-node button[class*="lazy-folder"]:selected,
+.sidebar-wrapper .sidebar-body .sidebar-node button[class*="lazy-folder"]:focus,
 .sidebar-wrapper .sidebar-body .sidebar-node button[class*="lazy-folder"]:active {
   color: var(--text-muted) !important;
   opacity: 0.5 !important;

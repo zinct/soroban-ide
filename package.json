@@ -14,11 +14,15 @@
   "dependencies": {
     "@stellar/freighter-api": "^6.0.1",
     "@stellar/stellar-base": "^15.0.0",
+    "@vercel/analytics": "^2.0.1",
     "lucide-react": "^1.7.0",
     "monaco-editor": "^0.50.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.0"
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^6.26.0",
+    "react-syntax-highlighter": "^16.1.1",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.0.1",
