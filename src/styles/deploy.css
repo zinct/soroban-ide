@@ -242,6 +242,22 @@
 }
 .deploy-input:focus { border-color: var(--accent, #7c3aed); }
 
+/* Make selects match the flat IDE styling (no native-glass dropdown background). */
+select.deploy-input {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: rgba(0,0,0,0.25) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%239aa0a6' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px 8px;
+  padding-right: 32px;
+  box-shadow: none;
+}
+
+select.deploy-input:focus { box-shadow: none; }
+
 .deploy-hint  { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
 .deploy-error {
   font-size: 12px;
@@ -297,7 +313,7 @@
 .deploy-fn-group-label.unknown { color: var(--text-muted); }
 
 .deploy-fn-card {
-  background: rgba(255,255,255,0.04);
+  background: rgba(255,255,255,0.02);
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 14px;
@@ -362,7 +378,7 @@
 }
 .deploy-testcase-chip {
   border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.02);
   color: var(--text-secondary);
   border-radius: 999px;
   padding: 2px 8px;
@@ -373,7 +389,7 @@
   gap: 6px;
 }
 .deploy-testcase-chip:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--text-primary);
 }
 .deploy-testcase-chip-x {
@@ -652,7 +668,7 @@
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 10px;
-  background: rgba(255, 255, 255, 0.02);
+  background: transparent;
 }
 .deploy-preset-row {
   display: grid;
@@ -768,7 +784,7 @@
   gap: 8px;
   padding: 10px 12px;
   border: 1px solid rgba(34, 197, 94, 0.25);
-  background: rgba(34, 197, 94, 0.04);
+  background: rgba(34, 197, 94, 0.02);
   border-radius: 8px;
 }
 
@@ -932,8 +948,7 @@ a.deploy-btn { text-decoration: none; }
 .deploy-diff-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(3px);
+  background: rgba(0, 0, 0, 0.78);
   z-index: 1200;
   display: flex;
   align-items: center;
@@ -944,7 +959,7 @@ a.deploy-btn { text-decoration: none; }
   width: min(820px, 96vw);
   max-height: 85vh;
   overflow: auto;
-  background: #141414;
+  background: #0f0f0f;
   border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 14px;
@@ -996,7 +1011,8 @@ a.deploy-btn { text-decoration: none; }
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   padding: 4px 6px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   word-break: break-word;
 }
 .deploy-diff-arrow {
