@@ -135,6 +135,8 @@ const DeployPanel = ({ treeData, fileContents }) => {
   const [presetsByPath, setPresetsByPath] = useState(() => loadDeployPresets());
   const [invokeCasesByPath, setInvokeCasesByPath] = useState(() => loadInvokeCases());
   const [copiedId, setCopiedId] = useState(null);
+  const [copiedDefault, setCopiedDefault] = useState(false);
+  const [copiedFreighter, setCopiedFreighter] = useState(false);
   // Invoke state is scoped by contract ID so each deployed contract has
   // its own independent test surface — essential once multiple contracts
   // show up in the Deployed Contracts list at the same time.
@@ -312,18 +314,18 @@ const DeployPanel = ({ treeData, fileContents }) => {
     return bucket.find((r) => r.status === "active") || bucket[0];
   }, [deploymentHistory, selectedContract]);
 
-  // Reset compile/deploy status when the contract folder name changes
-  // (e.g. after a rename). The compiled .wasm filename is derived from
-  // the folder name, so the old build artifact no longer matches.
-  const prevContractNameRef = useRef(contractFolderName());
+  // Reset compile/deploy status when the selected contract path changes
+  // (e.g. after a rename). The compiled .wasm artifact is derived from
+  // the contract location, so a stale build/deploy status can mismatch.
+  const prevContractPathRef = useRef(selectedContract?.path || "");
   useEffect(() => {
-    const current = contractFolderName();
-    if (prevContractNameRef.current && current && current !== prevContractNameRef.current) {
+    const current = selectedContract?.path || "";
+    if (prevContractPathRef.current && current && current !== prevContractPathRef.current) {
       setCompileStatus(null);
       setDeployStatus(null);
     }
-    prevContractNameRef.current = current;
-  }, [contractFolderName]);
+    prevContractPathRef.current = current;
+  }, [selectedContract?.path]);
 
   // ─── Wallet ───────────────────────────────────────────────────────────────
 
