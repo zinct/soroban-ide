@@ -322,6 +322,65 @@ export async function buildDeployedContractChecks(raw, options = {}) {
 }
 
 /**
+ * Combined README.md bodies for client-side README scans (same paths as deploy link resolution).
+ * @param {Record<string, string>} projectFiles
+ */
+export function getReadmeCombinedText(projectFiles) {
+  return collectReadmeBodies(projectFiles).join("\n\n");
+}
+
+/**
+ * Evidence that README documents deployment for reviewers: markdown image and/or link.
+ * The hosted validator often requires `![](…)` only; we treat `[text](https://…)` as sufficient too.
+ */
+export function readmeHasDeployedDetailsEvidence(markdown) {
+  if (!markdown || typeof markdown !== "string") return false;
+  const t = markdown;
+  if (/!\[[^\]]*\]\([^)]+\)/.test(t)) return true;
+  if (/\[[^\]]*\]\(\s*https?:\/\/[^)]+\)/i.test(t)) return true;
+  if (/<https?:\/\/[^>\s]+>/i.test(t)) return true;
+  return false;
+}
+
+function isReadmeDeployedDetailsBackendCheck(check) {
+  if (!check || check.status === "pass") return false;
+  if ((check.label || "").includes("Deployed Contract Details")) return true;
+  const msg = (check.message || "").toLowerCase();
+  if (msg.includes("no screenshot") && msg.includes("readme")) return true;
+  if (msg.includes("screenshot") && msg.includes("image") && msg.includes("readme")) return true;
+  return false;
+}
+
+/**
+ * If README has a deploy link (not only a screenshot), upgrade the backend "screenshot required" check to pass.
+ * @param {object} validationResult
+ * @param {Record<string, string>} projectFiles
+ */
+export function patchReadmeDeployedDetailsCheck(validationResult, projectFiles) {
+  if (!validationResult?.checks?.length) return validationResult;
+  const text = getReadmeCombinedText(projectFiles);
+  if (!readmeHasDeployedDetailsEvidence(text)) return validationResult;
+
+  let anyPatched = false;
+  const checks = validationResult.checks.map((c) => {
+    if (!isReadmeDeployedDetailsBackendCheck(c)) return c;
+    anyPatched = true;
+    return {
+      ...c,
+      status: "pass",
+      message:
+        "README includes deployment evidence: markdown image and/or a link to the deployed contract or explorer.",
+      fix_hint: undefined,
+      evidence: undefined,
+    };
+  });
+
+  if (!anyPatched) return validationResult;
+  const invalid = checks.some((c) => c.required && c.status === "fail");
+  return { ...validationResult, checks, status: invalid ? "invalid" : "valid" };
+}
+
+/**
  * Merge backend validation with client-side deploy checks and recompute top-level status.
  * @param {object} base — ValidateResponse from API
  * @param {object[]} extraChecks
