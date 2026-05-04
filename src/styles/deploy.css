@@ -414,6 +414,43 @@ select.deploy-input:focus { box-shadow: none; }
 }
 .val-toolbar .deploy-btn { flex: 1; width: auto; }
 
+.val-deploy-link {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 16px 14px;
+  border-bottom: 1px solid var(--border-color);
+}
+.val-deploy-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #aaa);
+}
+.val-deploy-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: ui-monospace, monospace;
+  padding: 8px 10px;
+  outline: none;
+}
+.val-deploy-input:focus {
+  border-color: var(--accent, #ffffff);
+}
+.val-deploy-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-muted, #888);
+}
+
 .val-select {
   flex: 1;
   background: rgba(255,255,255,0.07) !important;

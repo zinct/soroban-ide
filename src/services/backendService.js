@@ -210,11 +210,17 @@ export const getContractInterface = async (files, contractPath = "") => {
 // ─── Validation ───────────────────────────────────────────────────────────────
 
 /** POST /api/validate/project */
-export const validateProject = async (files, category = "ec-level", repoName = "") => {
+export const validateProject = async (files, category = "ec-level", repoName = "", options = {}) => {
+  const { deployed_contract_link: deployedContractLink = "" } = options;
   const res = await fetch(`${API_BASE}/validate/project`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ files, category, repo_name: repoName }),
+    body: JSON.stringify({
+      files,
+      category,
+      repo_name: repoName,
+      deployed_contract_link: deployedContractLink,
+    }),
   });
   if (!res.ok) throw new Error("Validation request failed");
   return res.json(); // ValidateResponse

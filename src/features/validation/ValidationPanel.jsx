@@ -1,7 +1,14 @@
-import React, { useState, useCallback } from "react";
-import { ShieldCheck, ShieldX, AlertTriangle, CheckCircle, XCircle, Loader, ChevronDown, ChevronRight } from "lucide-react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
+import { ShieldCheck, ShieldX, AlertTriangle, CheckCircle, XCircle, Loader, ChevronDown, ChevronRight, Link2 } from "lucide-react";
 import { useDeploy } from "../../context/DeployContext";
 import { validateProject, collectProjectFiles } from "../../services/backendService";
+import {
+  buildDeployedContractChecks,
+  mergeValidationWithDeployChecks,
+  resolveDeployedLinkInput,
+} from "./deployLinkValidation";
+
+const DEPLOY_LINK_STORAGE = "soroban:validation_deploy_link";
 
 const GROUPS = [
   { id: "repo",      label: "Repository",       prefixes: ["repo-"] },
@@ -70,15 +77,45 @@ const ValidationPanel = ({ treeData, fileContents }) => {
   const [category, setCategory] = useState("ec-level");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [deployedContractLink, setDeployedContractLink] = useState(() => {
+    try {
+      return sessionStorage.getItem(DEPLOY_LINK_STORAGE) || "";
+    } catch {
+      return "";
+    }
+  });
+  /** Mirrors the input; updated in onChange before React re-renders so Validate uses the latest paste. */
+  const deployedLinkDraftRef = useRef("");
+  deployedLinkDraftRef.current = deployedContractLink;
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(DEPLOY_LINK_STORAGE, deployedContractLink);
+    } catch {
+      /* ignore */
+    }
+  }, [deployedContractLink]);
 
   const handleValidate = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const files = collectProjectFiles(treeData, fileContents);
+      const { raw: deployLinkRaw, source: deployLinkSource } = resolveDeployedLinkInput(
+        deployedLinkDraftRef.current || "",
+        files
+      );
       // Derive repo name from root folder name
       const repoName = treeData?.[0]?.name || "";
-      const result = await validateProject(files, category, repoName);
+      let result = await validateProject(files, category, repoName, {
+        deployed_contract_link: deployLinkRaw,
+      });
+      if (category === "ec-level") {
+        const deployChecks = await buildDeployedContractChecks(deployLinkRaw, {
+          linkSource: deployLinkSource,
+        });
+        result = mergeValidationWithDeployChecks(result, deployChecks);
+      }
       setValidationResult(result);
     } catch (err) {
       setError(err.message);
@@ -108,6 +145,31 @@ const ValidationPanel = ({ treeData, fileContents }) => {
           {loading ? "Validating..." : "Validate"}
         </button>
       </div>
+
+      {category === "ec-level" && (
+        <div className="val-deploy-link">
+          <label className="val-deploy-label" htmlFor="val-deploy-url">
+            <Link2 size={12} aria-hidden />
+            Deployed contract (optional override)
+          </label>
+          <input
+            id="val-deploy-url"
+            type="text"
+            className="val-deploy-input"
+            placeholder="Leave empty to use README.md links"
+            value={deployedContractLink}
+            onChange={e => {
+              deployedLinkDraftRef.current = e.target.value;
+              setDeployedContractLink(e.target.value);
+            }}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <p className="val-deploy-hint">
+            By default we read contract / deploy-tx links (or a C… ID) from your README.md. Fill this only to override that (e.g. quick test with a different ID).
+          </p>
+        </div>
+      )}
 
       {error && <div className="deploy-error">{error}</div>}
 
