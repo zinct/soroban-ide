@@ -5,6 +5,7 @@ import { validateProject, collectProjectFiles } from "../../services/backendServ
 import {
   buildDeployedContractChecks,
   mergeValidationWithDeployChecks,
+  patchReadmeDeployedDetailsCheck,
   resolveDeployedLinkInput,
 } from "./deployLinkValidation";
 
@@ -110,6 +111,7 @@ const ValidationPanel = ({ treeData, fileContents }) => {
       let result = await validateProject(files, category, repoName, {
         deployed_contract_link: deployLinkRaw,
       });
+      result = patchReadmeDeployedDetailsCheck(result, files);
       if (category === "ec-level") {
         const deployChecks = await buildDeployedContractChecks(deployLinkRaw, {
           linkSource: deployLinkSource,

@@ -303,6 +303,33 @@ const Layout = () => {
     });
   }, [githubUrl, workspace, tabManager]);
 
+  /** Load a GitHub repo URL into the workspace (same as Clone from GitHub, friendlier copy from the GitHub panel). */
+  const handleOpenGithubRepository = useCallback(
+    (repoHtmlUrl) => {
+      const url = (repoHtmlUrl || "").trim();
+      if (!url) return;
+
+      const execute = async () => {
+        try {
+          await workspace.cloneFromGithub(url);
+          tabManager.resetTabs();
+          window.dispatchEvent(new CustomEvent("soroban:setSidebarPanel", { detail: { panel: "explorer" } }));
+        } catch (err) {
+          const msg = err?.message || "Could not open repository";
+          window.alert(msg);
+        }
+      };
+
+      setConfirmModal({
+        isOpen: true,
+        title: "Open repository",
+        message: "Load this repository into your workspace? Your current project files will be replaced.",
+        onConfirm: execute,
+      });
+    },
+    [workspace, tabManager],
+  );
+
   /* ─── Command Palette ─── */
 
   const openPalette = useCallback((mode = "command") => {
@@ -533,6 +560,7 @@ const Layout = () => {
               isSettingsOpen={isSettingsOpen}
               onToggleSettings={() => setIsSettingsOpen(!isSettingsOpen)}
               onConfirm={setConfirmModal}
+              onOpenGithubRepository={handleOpenGithubRepository}
             />
 
             {/* Project Creation Loading Overlay - Glass Blur */}

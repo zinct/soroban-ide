@@ -136,18 +136,128 @@ export const getUserInfo = async (token) => {
 
 // ─── Repository Operations ───────────────────────────────────────
 
+/** GitHub default max per_page for /user/repos; backend should forward this query param. */
+const USER_REPOS_PER_PAGE = 100;
+
 /**
- * List the authenticated user's repositories (sorted by most recently updated).
+ * Normalize list endpoint JSON (array vs wrapped payload).
+ */
+export const normalizeRepoListResponse = (data) => {
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.repositories)) return data.repositories;
+  if (data && Array.isArray(data.items)) return data.items;
+  return [];
+};
+
+/**
+ * List repositories the user can access (owned, collaborator, and org member).
+ * Query params match GitHub GET /user/repos; the backend proxy should forward them.
  */
 export const listUserRepos = async (token, page = 1) => {
-  const res = await fetch(`${API_BASE}/github/repos?page=${page}`, {
-    headers: { Authorization: `Bearer ${token}` },
+  const params = new URLSearchParams({
+    page: String(page),
+    per_page: String(USER_REPOS_PER_PAGE),
+    affiliation: "owner,collaborator,organization_member",
+    sort: "updated",
+    direction: "desc",
   });
+  const headers = { Authorization: `Bearer ${token}` };
+  let res;
+  try {
+    // Preferred request: include GitHub-style filters if the proxy supports them.
+    res = await fetch(`${API_BASE}/github/repos?${params.toString()}`, { headers });
+  } catch (err) {
+    // Fallback for stricter proxies that break on extra query params.
+    res = await fetch(`${API_BASE}/github/repos?page=${page}`, { headers });
+  }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
     throw new Error(formatGithubError(errorData, `Failed to list repositories (Status: ${res.status})`));
   }
+  return res.json();
+};
+
+/**
+ * Fetch all pages of the user's repos.
+ *
+ * Important: Many proxies return 30 items/page (GitHub default) even when per_page=100 is requested.
+ * We must not stop after the first page just because 30 < 100 — that hid repos past the first page.
+ * We paginate until GitHub returns an empty page, we hit maxPages, or a page adds no new repos (duplicate/stuck proxy).
+ */
+export const listAllUserRepos = async (token, maxPages = 60) => {
+  const all = [];
+  const seen = new Set();
+  for (let page = 1; page <= maxPages; page++) {
+    const raw = await listUserRepos(token, page);
+    const chunk = normalizeRepoListResponse(raw);
+    if (chunk.length === 0) break;
+
+    let added = 0;
+    for (const r of chunk) {
+      const id = r?.id != null ? `id:${r.id}` : `fn:${r?.full_name || ""}`;
+      if (!r?.full_name || seen.has(id)) continue;
+      seen.add(id);
+      all.push(r);
+      added++;
+    }
+
+    if (added === 0) break;
+  }
+  return all;
+};
+
+/**
+ * GET repository metadata (default_branch, owner, permissions).
+ */
+export const getRepository = async (token, owner, repo) => {
+  const res = await fetch(`${API_BASE}/github/api/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    if (res.status === 404) {
+      throw new Error(`Repository not found or no access: ${owner}/${repo}`);
+    }
+    throw new Error(formatGithubError(errorData, `Failed to load repository (Status: ${res.status})`));
+  }
+
+  return res.json();
+};
+
+/**
+ * List branches for a repository the user can access.
+ */
+export const listRepositoryBranches = async (token, owner, repo, perPage = 100) => {
+  const params = new URLSearchParams({ per_page: String(perPage) });
+  const res = await fetch(`${API_BASE}/github/api/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(formatGithubError(errorData, `Failed to list branches (${res.status})`));
+  }
+
+  return res.json();
+};
+
+/**
+ * GitHub repository search (same behavior as github.com search).
+ * Finds repos the token can access, including org repos missing from /user/repos.
+ */
+export const searchRepositories = async (token, query, perPage = 15) => {
+  const params = new URLSearchParams({ q: query, per_page: String(perPage) });
+  const res = await fetch(`${API_BASE}/github/api/search/repositories?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(formatGithubError(errorData, `Repository search failed (${res.status})`));
+  }
+
   return res.json();
 };
 
