@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
-import { isFreighterConnected, getFreighterAddress, getFreighterNetwork, connectFreighter } from "../services/freighter";
+import { connectStellarWallet, getConnectedWallet, WALLET_PROVIDERS } from "../services/walletManager";
 import { registerFreighterWallet } from "../services/backendService";
 
 const ContractContext = createContext(null);
@@ -23,21 +23,25 @@ export const ContractProvider = ({ children }) => {
   const [contractId, setContractId] = useState(null);
   const [walletAddress, setWalletAddress] = useState(null);
   const [walletNetwork, setWalletNetwork] = useState(null);
+  const [walletNetworkPassphrase, setWalletNetworkPassphrase] = useState(null);
+  const [walletProviderId, setWalletProviderId] = useState("freighter");
+  const [walletClient, setWalletClient] = useState(null);
   const [isInteractActive, setIsInteractActive] = useState(false);
   const [error, setError] = useState(null);
 
-  // Check if Freighter is already connected on mount — NO popup, silent only
+  // Silent check on mount (currently Freighter path).
   useEffect(() => {
     const checkConnection = async () => {
       try {
-        const connected = await isFreighterConnected();
-        if (connected) {
-          const [{ address }, net] = await Promise.all([getFreighterAddress(), getFreighterNetwork()]);
-          if (address) {
-            setWalletAddress(address);
-            setWalletNetwork(net?.network || null);
-            safeRegisterFreighter(address);
-          }
+        const connected = await getConnectedWallet();
+        if (!connected?.address) return;
+        setWalletAddress(connected.address);
+        setWalletNetwork(connected.network || null);
+        setWalletNetworkPassphrase(connected.networkPassphrase || null);
+        setWalletProviderId(connected.providerId || "freighter");
+        setWalletClient(connected.client || null);
+        if ((connected.providerId || "freighter") === "freighter") {
+          safeRegisterFreighter(connected.address);
         }
       } catch (err) {
         // Silently ignore — user hasn't connected yet
@@ -47,25 +51,23 @@ export const ContractProvider = ({ children }) => {
   }, []);
 
 
-  const connectWallet = useCallback(async () => {
+  const connectWallet = useCallback(async (providerId = walletProviderId) => {
     try {
       setError(null);
-      const { address, network, wrongNetwork, error: freighterError } = await connectFreighter();
-      if (freighterError) {
-        // Freighter occasionally returns `{ code, message }` here, not a string.
-        // Without coercion this becomes "[object Object]" in the wallet card.
-        const msg =
-          typeof freighterError === "string" ? freighterError :
-          (freighterError?.message || JSON.stringify(freighterError));
-        throw new Error(msg);
-      }
+      const { address, network, networkPassphrase, wrongNetwork, client, providerId: connectedProvider } = await connectStellarWallet(providerId);
       if (address) {
         setWalletAddress(address);
         setWalletNetwork(network || null);
-        // Register public key in runner container so CLI can use it as --source
-        safeRegisterFreighter(address);
+        setWalletNetworkPassphrase(networkPassphrase || null);
+        setWalletProviderId(connectedProvider || providerId);
+        setWalletClient(client || null);
+        // Register public key in runner container so CLI can use it as --source.
+        // Backend endpoint is currently Freighter-specific.
+        if ((connectedProvider || providerId) === "freighter") {
+          safeRegisterFreighter(address);
+        }
         if (wrongNetwork) {
-          setError("⚠️ Freighter is on Mainnet. Please switch to Testnet in Freighter settings.");
+          setError("⚠️ Wallet is not on Testnet. Please switch to Testnet in your wallet settings.");
         }
         return address;
       }
@@ -73,15 +75,22 @@ export const ContractProvider = ({ children }) => {
       setError(err.message);
       throw err;
     }
-  }, []);
+  }, [walletProviderId]);
 
   const disconnectWallet = useCallback(() => {
     setWalletAddress(null);
+    setWalletNetwork(null);
+    setWalletNetworkPassphrase(null);
+    setWalletClient(null);
   }, []);
 
   const value = {
     contractId, setContractId,
     walletAddress, walletNetwork,
+    walletNetworkPassphrase,
+    walletProviderId, setWalletProviderId,
+    walletClient,
+    walletProviders: WALLET_PROVIDERS,
     connectWallet, disconnectWallet,
     isInteractActive, setIsInteractActive,
     error, setError,

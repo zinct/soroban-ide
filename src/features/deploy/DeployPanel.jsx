@@ -11,7 +11,8 @@ import {
   collectProjectFiles,
   getSessionId,
 } from "../../services/backendService";
-import { signAndSubmitWithFreighter } from "../../services/freighter";
+import { signAndSubmitWithSigner } from "../../services/freighter";
+import { signWithWallet } from "../../services/walletManager";
 import {
   findContracts,
   groupContracts,
@@ -121,7 +122,18 @@ const DeployPanel = ({ treeData, fileContents }) => {
     deployStatus, setDeployStatus,
     deploymentHistory, addDeployment, removeDeployment, clearGroup, clearAllHistory, promoteToActive, togglePinned,
   } = useDeploy();
-  const { walletAddress, walletNetwork, connectWallet, disconnectWallet, error: walletConnectError } = useContract();
+  const {
+    walletAddress,
+    walletNetwork,
+    walletNetworkPassphrase,
+    walletProviderId,
+    setWalletProviderId,
+    walletClient,
+    walletProviders,
+    connectWallet,
+    disconnectWallet,
+    error: walletConnectError,
+  } = useContract();
 
   const [walletError, setWalletError] = useState(null);
   const [freighterBalance, setFreighterBalance] = useState(null);
@@ -406,12 +418,12 @@ const DeployPanel = ({ treeData, fileContents }) => {
       }));
       return;
     }
-    const useFreighter = sourceAccount === "freighter" && walletAddress;
+    const useWallet = sourceAccount === "wallet" && walletAddress;
     // For Freighter deploys we pass the live public key directly instead of a
     // backend identity alias. The alias can get stale if the extension account
     // changes, which leads to source/sequence mismatches (txBadSeq).
-    const sourceKey = useFreighter ? walletAddress : (defaultWallet?.name || "stellar-ide-default");
-    const buildOnly = useFreighter ? " --build-only" : "";
+    const sourceKey = useWallet ? walletAddress : (defaultWallet?.name || "stellar-ide-default");
+    const buildOnly = useWallet ? " --build-only" : "";
     const salt = saltMode === "manual" ? manualSalt.trim().toLowerCase() : randomSaltHex();
     if (!/^[0-9a-f]{64}$/.test(salt)) {
       setDeployStatus("error");
@@ -434,8 +446,8 @@ const DeployPanel = ({ treeData, fileContents }) => {
       alias,
       scopedAlias,
       network: deployNetwork,
-      wallet: useFreighter ? "freighter" : (defaultWallet?.name || "stellar-ide-default"),
-      walletAddress: useFreighter ? walletAddress : (defaultWallet?.address || null),
+      wallet: useWallet ? (walletProviderId || "wallet") : (defaultWallet?.name || "stellar-ide-default"),
+      walletAddress: useWallet ? walletAddress : (defaultWallet?.address || null),
     };
 
     // Record a new deployment in the history. Fetches the contract
@@ -491,7 +503,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
         onError: () => { setDeployStatus("error"); window.dispatchEvent(new Event("soroban:terminalIdle")); cleanup?.(); },
         onDone: async () => {
           window.dispatchEvent(new Event("soroban:terminalIdle"));
-          if (useFreighter) {
+          if (useWallet) {
             // Extract XDR: stellar --build-only prints the assembled XDR as the last
             // stdout line. It's a base64 string (only A-Z, a-z, 0-9, +, /, =).
             const xdrLineRe = /^[A-Za-z0-9+/]+=*$/;
@@ -504,9 +516,19 @@ const DeployPanel = ({ treeData, fileContents }) => {
               window.dispatchEvent(new CustomEvent("soroban:terminalAppend", {
                 detail: { type: "output", content: "🔐 Signing with Freighter…" }
               }));
-              const result = await signAndSubmitWithFreighter(xdr, walletAddress);
+              const result = await signAndSubmitWithSigner(
+                xdr,
+                walletAddress,
+                (xdrToSign, address) =>
+                  signWithWallet(xdrToSign, {
+                    providerId: walletProviderId,
+                    address,
+                    networkPassphrase: walletNetworkPassphrase,
+                    client: walletClient,
+                  }),
+              );
               window.dispatchEvent(new CustomEvent("soroban:terminalAppend", {
-                detail: { type: "output", content: "✅ Transaction submitted via Freighter!" }
+                detail: { type: "output", content: `✅ Transaction submitted via ${walletProviderId || "wallet"}!` }
               }));
               if (result?.contractId) {
                 await recordDeploy(result.contractId);
@@ -546,7 +568,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
         detail: { type: "error", content: err.message }
       }));
     }
-  }, [treeData, fileContents, alias, sourceAccount, walletAddress, defaultWallet, selectedContract, addDeployment, deployNetwork, saltMode, manualSalt]);
+  }, [treeData, fileContents, alias, sourceAccount, walletAddress, walletProviderId, walletNetworkPassphrase, walletClient, defaultWallet, selectedContract, addDeployment, deployNetwork, saltMode, manualSalt]);
 
   // ─── Invoke → stream to Terminal (scoped per contract) ───────────────────
 
@@ -737,7 +759,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
     setPresetName(preset.name || "");
     setAlias(preset.alias || selectedContract.name || "my-contract");
     aliasEditedRef.current = true;
-    setSourceAccount(preset.sourceAccount || "default");
+    setSourceAccount((preset.sourceAccount === "freighter" ? "wallet" : preset.sourceAccount) || "default");
     setDeployNetwork(preset.network || DEFAULT_NETWORK);
     const mode = preset.saltMode || DEFAULT_SALT_MODE;
     setSaltMode(mode);
@@ -820,11 +842,24 @@ const DeployPanel = ({ treeData, fileContents }) => {
         </div>
 
         <div className="deploy-subsection">
-          <div className="deploy-subsection-label">Freighter Wallet</div>
+          <div className="deploy-subsection-label">External Wallet</div>
+          <select
+            className="deploy-input"
+            value={walletProviderId}
+            onChange={(e) => setWalletProviderId(e.target.value)}
+            disabled={!!walletAddress}
+            style={{ marginBottom: 8 }}
+          >
+            {walletProviders.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.label}
+              </option>
+            ))}
+          </select>
           {walletAddress ? (
             <div className="deploy-wallet-card">
               <div className="deploy-wallet-card-name">
-                <span>Freighter</span>
+                <span>{walletProviders.find((w) => w.id === walletProviderId)?.label || walletProviderId}</span>
                 {walletNetwork && (
                   <span className={`deploy-wallet-funded ${walletNetwork.toLowerCase().includes("test") ? "funded" : "unfunded"}`}>
                     {walletNetwork}
@@ -848,10 +883,11 @@ const DeployPanel = ({ treeData, fileContents }) => {
             </div>
           ) : (
             <>
-              <button className="deploy-btn deploy-btn-secondary" onClick={connectWallet}>Connect Freighter</button>
+              <button className="deploy-btn deploy-btn-secondary" onClick={() => connectWallet(walletProviderId)}>
+                Connect {walletProviders.find((w) => w.id === walletProviderId)?.label || "Wallet"}
+              </button>
               <div className="deploy-hint" style={{marginTop:4}}>
-                ⚠️ Before connecting, switch Freighter to <strong>Testnet</strong>:<br/>
-                Freighter → Settings → Network → Test SDF Network
+                ⚠️ Before connecting, switch wallet network to <strong>Testnet</strong>.
               </div>
             </>
           )}
@@ -961,7 +997,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
           >
             <option value="default">Default — {defaultWallet?.name || "stellar-ide-default"}</option>
             {walletAddress && (
-              <option value="freighter">Freighter — {walletAddress.slice(0,6)}…{walletAddress.slice(-4)}</option>
+              <option value="wallet">{walletProviders.find((w) => w.id === walletProviderId)?.label || "Wallet"} — {walletAddress.slice(0,6)}…{walletAddress.slice(-4)}</option>
             )}
           </select>
         </div>
