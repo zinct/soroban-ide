@@ -449,6 +449,13 @@
   white-space: nowrap;
 }
 
+.github-repo-push-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.9;
+  margin-top: 2px;
+}
+
 .github-branch-row {
   display: flex;
   align-items: center;
@@ -628,6 +635,25 @@
   font-size: 11px;
   color: #f87171;
   margin-top: 4px;
+}
+
+.github-flow-note {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--hover-bg);
+  padding: 8px 10px;
+  margin-top: -2px;
+}
+
+.github-flow-note code {
+  font-family: inherit;
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  padding: 1px 5px;
 }
 
 /* ─── Browse main view (open repos first) ─── */
