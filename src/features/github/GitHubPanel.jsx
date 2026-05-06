@@ -1,4 +1,4 @@
-import React, { memo, useState, useCallback, useEffect, useRef } from "react";
+import React, { memo, useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   getStoredToken,
   getStoredUser,
@@ -303,6 +303,7 @@ const GitHubPanel = memo(({ treeData, fileContents, onConfirm, onOpenGithubRepos
     setActiveView("existing");
     setPushResult(null);
     setPushError(null);
+    setRepoSearch("");
     loadRepos();
   }, [loadRepos]);
 
@@ -450,6 +451,19 @@ const GitHubPanel = memo(({ treeData, fileContents, onConfirm, onOpenGithubRepos
     const hay = [r?.full_name, r?.name, r?.owner?.login].filter(Boolean).join(" ").toLowerCase();
     return hay.includes(q);
   });
+  const workspaceRootName = (treeData?.[0]?.name || "").trim().toLowerCase();
+  const currentWorkspaceRepo = useMemo(() => {
+    if (!workspaceRootName || !repos.length) return null;
+    return (
+      repos.find((r) => (r?.full_name || "").toLowerCase().endsWith(`/${workspaceRootName}`)) ||
+      repos.find((r) => (r?.name || "").toLowerCase() === workspaceRootName) ||
+      null
+    );
+  }, [repos, workspaceRootName]);
+  const reposForExisting = useMemo(() => {
+    if (!currentWorkspaceRepo) return repos;
+    return [currentWorkspaceRepo, ...repos.filter((r) => r.id !== currentWorkspaceRepo.id)];
+  }, [repos, currentWorkspaceRepo]);
 
   // ─── Render Helpers ─────────────────────────────────────────
 
@@ -873,49 +887,14 @@ const GitHubPanel = memo(({ treeData, fileContents, onConfirm, onOpenGithubRepos
                 onChange={(e) => setExistingTargetBranch(e.target.value.replace(/\s+/g, ""))}
                 placeholder="Leave empty to use each repo’s default branch"
               />
-              <span className="github-form-hint">Applies to every repo you push from this list.</span>
+              <span className="github-form-hint">Commit message + repo row are required. Target branch is optional override.</span>
             </div>
 
-            <div className="github-form-group">
-              <label className="github-form-label">Filter repositories (optional)</label>
-              <input
-                className="github-form-input github-search-input"
-                type="text"
-                value={repoSearch}
-                onChange={(e) => setRepoSearch(e.target.value)}
-                placeholder="Narrow the list below — not a repo URL"
-              />
-              <span className="github-form-hint">Type part of owner/repo; this only filters the loaded list.</span>
-            </div>
-
-            <div className="github-form-group">
-              <label className="github-form-label">Open repository by name</label>
-              <div className="github-inline-row">
-                <input
-                  className="github-form-input"
-                  type="text"
-                  value={manualRepoInput}
-                  onChange={(e) => setManualRepoInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleAddRepoByFullName();
-                    }
-                  }}
-                  placeholder="owner/repo, repo name, or GitHub URL"
-                  disabled={manualRepoLoading}
-                />
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={manualRepoLoading || !manualRepoInput.trim()}
-                  onClick={handleAddRepoByFullName}>
-                  {manualRepoLoading ? "…" : "Add"}
-                </button>
+            {currentWorkspaceRepo && (
+              <div className="github-form-hint" style={{ marginTop: "-4px", marginBottom: "6px" }}>
+                Current codebase repo pinned first: <strong>{currentWorkspaceRepo.full_name}</strong>
               </div>
-              <span className="github-form-hint">Use this if a repo is missing from the list (pagination, org, or load error).</span>
-              {manualRepoError && <div className="github-form-inline-error">{manualRepoError}</div>}
-            </div>
+            )}
 
             {reposLoading ? (
               <div className="github-waiting-indicator">
@@ -924,7 +903,7 @@ const GitHubPanel = memo(({ treeData, fileContents, onConfirm, onOpenGithubRepos
               </div>
             ) : (
               <div className="github-repo-list">
-                {filteredRepos.map((repo) => {
+                {reposForExisting.map((repo) => {
                   const targetBranch = existingTargetBranch.trim() || getTargetBranch(repo);
                   return (
                     <button
@@ -936,6 +915,7 @@ const GitHubPanel = memo(({ treeData, fileContents, onConfirm, onOpenGithubRepos
                       <div className="github-repo-info">
                         <span className="github-repo-name">{repo.name}</span>
                         <span className="github-repo-owner">{repo.full_name}</span>
+                        <span className="github-repo-push-hint">Pushes to branch: {targetBranch}</span>
                       </div>
                       <div className="github-repo-meta">
                         <span className="github-branch-chip">{targetBranch}</span>
@@ -947,9 +927,9 @@ const GitHubPanel = memo(({ treeData, fileContents, onConfirm, onOpenGithubRepos
                     </button>
                   );
                 })}
-                {filteredRepos.length === 0 && !reposLoading && !reposLoadError && (
+                {reposForExisting.length === 0 && !reposLoading && !reposLoadError && (
                   <p className="github-empty-text">
-                    {repos.length === 0 ? "No repositories in this list yet. Use “Open repository by name” above." : "No repositories match this filter."}
+                    No repositories available right now. Click Retry to reload.
                   </p>
                 )}
               </div>
