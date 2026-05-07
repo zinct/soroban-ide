@@ -143,6 +143,7 @@ async function resolveContractFromTxUrls(trimmed, hint) {
         : [RPC_TESTNET, RPC_MAINNET];
 
   let lastMessage = "Transaction not found on public Soroban RPC (wrong network, or older than the RPC history window).";
+  let sawNetworkFailure = false;
 
   for (const hash of hashes) {
     for (const rpc of rpcOrder) {
@@ -156,9 +157,20 @@ async function resolveContractFromTxUrls(trimmed, hint) {
         const contractId = pickDeployedContractFromTxResult(got.result);
         if (contractId) return { contractId, resolvedFromTxHash: hash };
       } catch (e) {
-        lastMessage = e.message || String(e);
+        const msg = e?.message || String(e);
+        lastMessage = msg;
+        if (/failed to fetch|networkerror|fetch/i.test(msg)) {
+          sawNetworkFailure = true;
+        }
       }
     }
+  }
+  if (sawNetworkFailure) {
+    return {
+      error:
+        "Could not reach public Soroban RPC from this browser right now. Paste the contract page URL or raw C… contract ID to validate directly.",
+      networkIssue: true,
+    };
   }
   return { error: lastMessage };
 }
@@ -174,12 +186,12 @@ export function extractContractId(raw) {
   const text = raw.trim();
   if (!text) return null;
 
-  const re = /C[A-Z2-7]{55}/g;
+  const re = /[cC][A-Za-z2-7]{55}/g;
   const matches = [...text.matchAll(re)];
   if (!matches.length) return null;
 
   const ranked = matches.map((m) => {
-    const id = m[0];
+    const id = m[0].toUpperCase();
     const idx = m.index ?? 0;
     const ctx = text
       .slice(Math.max(0, idx - 80), Math.min(text.length, idx + id.length + 24))
@@ -253,6 +265,20 @@ export async function buildDeployedContractChecks(raw, options = {}) {
   if (!extracted) {
     const txRes = await resolveContractFromTxUrls(trimmed, hint);
     if (txRes && "error" in txRes) {
+      if (txRes.networkIssue) {
+        return [
+          {
+            id: "contracts-deployed-link-rpc",
+            label: "Deployed contract link — RPC lookup",
+            status: "warn",
+            required: false,
+            message: txRes.error,
+            fix_hint:
+              "Use a direct contract link or paste the raw C… contract ID when transaction lookup is unavailable.",
+            evidence: trimmed.slice(0, 200),
+          },
+        ];
+      }
       return [
         {
           id: "contracts-deployed-link-format",
