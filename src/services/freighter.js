@@ -170,16 +170,23 @@ async function getAccountSequence(address) {
  * and submit.
  */
 export const signAndSubmitWithFreighter = async (assembledXdr, freighterAddress) => {
-  return await _signAndSubmitOnce(assembledXdr, freighterAddress, /* allowRetry */ true);
+  return await _signAndSubmitOnce(assembledXdr, freighterAddress, /* allowRetry */ true, signFreighterTransaction);
 };
 
-const _signAndSubmitOnce = async (assembledXdr, freighterAddress, allowRetry) => {
+export const signAndSubmitWithSigner = async (assembledXdr, walletAddress, signer) => {
+  if (typeof signer !== "function") {
+    throw new Error("signAndSubmitWithSigner requires a signer function");
+  }
+  return await _signAndSubmitOnce(assembledXdr, walletAddress, /* allowRetry */ true, signer);
+};
+
+const _signAndSubmitOnce = async (assembledXdr, walletAddress, allowRetry, signer) => {
   const sim = await rpc("simulateTransaction", { transaction: assembledXdr });
   if (sim?.error) {
     throw new Error(`Simulation failed: ${typeof sim.error === "string" ? sim.error : JSON.stringify(sim.error)}`);
   }
 
-  const sequence = await getAccountSequence(freighterAddress);
+  const sequence = await getAccountSequence(walletAddress);
 
   const env = StellarXdr.TransactionEnvelope.fromXDR(assembledXdr, "base64");
   const innerTx = env.v1().tx();
@@ -203,7 +210,7 @@ const _signAndSubmitOnce = async (assembledXdr, freighterAddress, allowRetry) =>
 
   let signedXdr;
   try {
-    signedXdr = await signFreighterTransaction(env.toXDR("base64"), freighterAddress);
+    signedXdr = await signer(env.toXDR("base64"), walletAddress);
   } catch (e) {
     // User rejected, locked extension, etc. — preserve the raw message but
     // tag it so the caller can label it accurately.
@@ -222,7 +229,7 @@ const _signAndSubmitOnce = async (assembledXdr, freighterAddress, allowRetry) =>
       // Small pause gives RPC/Horizon state a chance to settle if another tx
       // landed from the same account right before submit.
       await new Promise((r) => setTimeout(r, 650));
-      return await _signAndSubmitOnce(assembledXdr, freighterAddress, false);
+      return await _signAndSubmitOnce(assembledXdr, walletAddress, false, signer);
     }
     const err = new Error(`Transaction rejected: ${decoded}`);
     err.stage = "submit";
