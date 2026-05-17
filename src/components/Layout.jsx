@@ -216,6 +216,7 @@ const Layout = () => {
 
           // Reset state for a fresh start
           tabManager.resetTabs();
+          window.dispatchEvent(new CustomEvent("soroban:clearTerminal"));
 
           // Initialize locally using the specified template from BACKEND filesystem
           console.log(`[Layout] Fetching ${templateName} template from backend filesystem...`);
@@ -284,6 +285,7 @@ const Layout = () => {
       try {
         await workspace.cloneFromGithub(githubUrl);
         tabManager.resetTabs();
+        window.dispatchEvent(new CustomEvent("soroban:clearTerminal"));
         setCloneStatus({ type: "success", message: "Repository cloned successfully!" });
         setTimeout(() => {
           setShowGithubClone(false);
@@ -313,6 +315,7 @@ const Layout = () => {
         try {
           await workspace.cloneFromGithub(url);
           tabManager.resetTabs();
+          window.dispatchEvent(new CustomEvent("soroban:clearTerminal"));
           window.dispatchEvent(new CustomEvent("soroban:setSidebarPanel", { detail: { panel: "explorer" } }));
         } catch (err) {
           const msg = err?.message || "Could not open repository";
