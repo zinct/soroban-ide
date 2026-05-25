@@ -26,8 +26,6 @@ const sanitizeStatus = (s) => (s === "running" ? null : s || null);
 export const DeployProvider = ({ children }) => {
   const saved = load();
 
-  const [defaultWallet, setDefaultWallet] = useState(null);
-  const [walletLoading, setWalletLoading] = useState(false);
   const [compileStatus, setCompileStatus] = useState(sanitizeStatus(saved.compileStatus));
   const [deployStatus, setDeployStatus] = useState(sanitizeStatus(saved.deployStatus));
   const [validationResult, setValidationResult] = useState(null);
@@ -83,7 +81,6 @@ export const DeployProvider = ({ children }) => {
 
   return (
     <DeployContext.Provider value={{
-      defaultWallet, setDefaultWallet, walletLoading, setWalletLoading,
       compileStatus, setCompileStatus,
       deployStatus, setDeployStatus,
       validationResult, setValidationResult,
