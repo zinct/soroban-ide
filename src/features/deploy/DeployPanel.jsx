@@ -3,8 +3,6 @@ import { Wallet, Hammer, Rocket, CheckCircle, AlertCircle, Loader, Copy, Check, 
 import { useDeploy } from "../../context/DeployContext";
 import { useContract } from "../../context/ContractContext";
 import {
-  initDefaultWallet,
-  getDefaultWalletStatus,
   getContractInterface,
   submitCommand,
   connectBuildStream,
@@ -117,7 +115,6 @@ const Section = ({ icon, title, children, defaultOpen = false, badge }) => {
 
 const DeployPanel = ({ treeData, fileContents }) => {
   const {
-    defaultWallet, setDefaultWallet, walletLoading, setWalletLoading,
     compileStatus, setCompileStatus,
     deployStatus, setDeployStatus,
     deploymentHistory, addDeployment, removeDeployment, clearGroup, clearAllHistory, promoteToActive, togglePinned,
@@ -135,10 +132,8 @@ const DeployPanel = ({ treeData, fileContents }) => {
     error: walletConnectError,
   } = useContract();
 
-  const [walletError, setWalletError] = useState(null);
   const [freighterBalance, setFreighterBalance] = useState(null);
   const [alias, setAlias] = useState("my-contract");
-  const [sourceAccount, setSourceAccount] = useState("default");
   const [deployNetwork, setDeployNetwork] = useState(DEFAULT_NETWORK);
   const [saltMode, setSaltMode] = useState(DEFAULT_SALT_MODE); // random | manual
   const [manualSalt, setManualSalt] = useState("");
@@ -147,7 +142,6 @@ const DeployPanel = ({ treeData, fileContents }) => {
   const [presetsByPath, setPresetsByPath] = useState(() => loadDeployPresets());
   const [invokeCasesByPath, setInvokeCasesByPath] = useState(() => loadInvokeCases());
   const [copiedId, setCopiedId] = useState(null);
-  const [copiedDefault, setCopiedDefault] = useState(false);
   const [copiedFreighter, setCopiedFreighter] = useState(false);
   // Invoke state is scoped by contract ID so each deployed contract has
   // its own independent test surface — essential once multiple contracts
@@ -219,10 +213,6 @@ const DeployPanel = ({ treeData, fileContents }) => {
     setSelectedPresetId("");
     setPresetName("");
   }, [selectedContract?.path]);
-
-  useEffect(() => {
-    getDefaultWalletStatus().then(setDefaultWallet).catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (!walletAddress) { setFreighterBalance(null); return; }
@@ -339,21 +329,6 @@ const DeployPanel = ({ treeData, fileContents }) => {
     prevContractPathRef.current = current;
   }, [selectedContract?.path]);
 
-  // ─── Wallet ───────────────────────────────────────────────────────────────
-
-  const handleInitWallet = useCallback(async () => {
-    setWalletLoading(true);
-    setWalletError(null);
-    try {
-      const status = await initDefaultWallet();
-      setDefaultWallet(status);
-    } catch (err) {
-      setWalletError(err.message);
-    } finally {
-      setWalletLoading(false);
-    }
-  }, []);
-
   // ─── Compile → stream to Terminal ────────────────────────────────────────
 
   const handleCompile = useCallback(async () => {
@@ -407,6 +382,13 @@ const DeployPanel = ({ treeData, fileContents }) => {
 
   const executeDeploy = useCallback(async () => {
     if (!selectedContract) return;
+    if (!walletAddress) {
+      setDeployStatus("error");
+      window.dispatchEvent(new CustomEvent("soroban:terminalAppend", {
+        detail: { type: "error", content: "Connect an external wallet before deploying." }
+      }));
+      return;
+    }
     setDeployStatus("running");
     window.dispatchEvent(new Event("soroban:terminalBusy"));
     const files = collectProjectFiles(treeData, fileContents);
@@ -418,12 +400,11 @@ const DeployPanel = ({ treeData, fileContents }) => {
       }));
       return;
     }
-    const useWallet = sourceAccount === "wallet" && walletAddress;
-    // For Freighter deploys we pass the live public key directly instead of a
-    // backend identity alias. The alias can get stale if the extension account
-    // changes, which leads to source/sequence mismatches (txBadSeq).
-    const sourceKey = useWallet ? walletAddress : (defaultWallet?.name || "stellar-ide-default");
-    const buildOnly = useWallet ? " --build-only" : "";
+    // Pass the live public key directly instead of a backend identity alias.
+    // The alias can get stale if the wallet's active account changes, which
+    // leads to source/sequence mismatches (txBadSeq).
+    const sourceKey = walletAddress;
+    const buildOnly = " --build-only";
     const salt = saltMode === "manual" ? manualSalt.trim().toLowerCase() : randomSaltHex();
     if (!/^[0-9a-f]{64}$/.test(salt)) {
       setDeployStatus("error");
@@ -446,8 +427,8 @@ const DeployPanel = ({ treeData, fileContents }) => {
       alias,
       scopedAlias,
       network: deployNetwork,
-      wallet: useWallet ? (walletProviderId || "wallet") : (defaultWallet?.name || "stellar-ide-default"),
-      walletAddress: useWallet ? walletAddress : (defaultWallet?.address || null),
+      wallet: walletProviderId || "wallet",
+      walletAddress,
     };
 
     // Record a new deployment in the history. Fetches the contract
@@ -503,59 +484,53 @@ const DeployPanel = ({ treeData, fileContents }) => {
         onError: () => { setDeployStatus("error"); window.dispatchEvent(new Event("soroban:terminalIdle")); cleanup?.(); },
         onDone: async () => {
           window.dispatchEvent(new Event("soroban:terminalIdle"));
-          if (useWallet) {
-            // Extract XDR: stellar --build-only prints the assembled XDR as the last
-            // stdout line. It's a base64 string (only A-Z, a-z, 0-9, +, /, =).
-            const xdrLineRe = /^[A-Za-z0-9+/]+=*$/;
-            const xdr = fullLog.trim().split("\n")
-              .map(l => l.trim())
-              .filter(l => xdrLineRe.test(l))
-              .pop();
-            if (!xdr) { setDeployStatus("error"); cleanup(); return; }
-            try {
+          // Extract XDR: stellar --build-only prints the assembled XDR as the
+          // last stdout line. It's a base64 string (only A-Z, a-z, 0-9, +, /, =).
+          const xdrLineRe = /^[A-Za-z0-9+/]+=*$/;
+          const xdr = fullLog.trim().split("\n")
+            .map(l => l.trim())
+            .filter(l => xdrLineRe.test(l))
+            .pop();
+          if (!xdr) { setDeployStatus("error"); cleanup(); return; }
+          try {
+            window.dispatchEvent(new CustomEvent("soroban:terminalAppend", {
+              detail: { type: "output", content: "🔐 Signing with wallet…" }
+            }));
+            const result = await signAndSubmitWithSigner(
+              xdr,
+              walletAddress,
+              (xdrToSign, address) =>
+                signWithWallet(xdrToSign, {
+                  providerId: walletProviderId,
+                  address,
+                  networkPassphrase: walletNetworkPassphrase,
+                  client: walletClient,
+                }),
+            );
+            window.dispatchEvent(new CustomEvent("soroban:terminalAppend", {
+              detail: { type: "output", content: `✅ Transaction submitted via ${walletProviderId || "wallet"}!` }
+            }));
+            if (result?.contractId) {
+              await recordDeploy(result.contractId);
               window.dispatchEvent(new CustomEvent("soroban:terminalAppend", {
-                detail: { type: "output", content: "🔐 Signing with Freighter…" }
+                detail: { type: "output", content: `📋 Contract ID: ${result.contractId}` }
               }));
-              const result = await signAndSubmitWithSigner(
-                xdr,
-                walletAddress,
-                (xdrToSign, address) =>
-                  signWithWallet(xdrToSign, {
-                    providerId: walletProviderId,
-                    address,
-                    networkPassphrase: walletNetworkPassphrase,
-                    client: walletClient,
-                  }),
-              );
-              window.dispatchEvent(new CustomEvent("soroban:terminalAppend", {
-                detail: { type: "output", content: `✅ Transaction submitted via ${walletProviderId || "wallet"}!` }
-              }));
-              if (result?.contractId) {
-                await recordDeploy(result.contractId);
-                window.dispatchEvent(new CustomEvent("soroban:terminalAppend", {
-                  detail: { type: "output", content: `📋 Contract ID: ${result.contractId}` }
-                }));
-              }
-              setDeployStatus("success");
-            } catch (err) {
-              // Use the stage tag set by signAndSubmitWithFreighter so the
-              // user sees what actually failed (sign popup vs RPC submit
-              // vs on-chain). The message itself already includes the
-              // decoded txResultCode where applicable.
-              const label =
-                err.stage === "submit"  ? "❌ Submit failed:"   :
-                err.stage === "onchain" ? "❌ On-chain failed:" :
-                err.stage === "sign"    ? "❌ Sign failed:"     :
-                                          "❌ Deploy failed:";
-              window.dispatchEvent(new CustomEvent("soroban:terminalAppend", {
-                detail: { type: "error", content: `${label} ${err.message}` }
-              }));
-              setDeployStatus("error");
             }
-          } else {
-            const match = fullLog.match(/C[A-Z2-7]{55}/);
-            if (match) await recordDeploy(match[0]);
             setDeployStatus("success");
+          } catch (err) {
+            // Use the stage tag set by signAndSubmitWithSigner so the user
+            // sees what actually failed (sign popup vs RPC submit vs on-chain).
+            // The message itself already includes the decoded txResultCode
+            // where applicable.
+            const label =
+              err.stage === "submit"  ? "❌ Submit failed:"   :
+              err.stage === "onchain" ? "❌ On-chain failed:" :
+              err.stage === "sign"    ? "❌ Sign failed:"     :
+                                        "❌ Deploy failed:";
+            window.dispatchEvent(new CustomEvent("soroban:terminalAppend", {
+              detail: { type: "error", content: `${label} ${err.message}` }
+            }));
+            setDeployStatus("error");
           }
           cleanup();
         },
@@ -568,7 +543,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
         detail: { type: "error", content: err.message }
       }));
     }
-  }, [treeData, fileContents, alias, sourceAccount, walletAddress, walletProviderId, walletNetworkPassphrase, walletClient, defaultWallet, selectedContract, addDeployment, deployNetwork, saltMode, manualSalt]);
+  }, [treeData, fileContents, alias, walletAddress, walletProviderId, walletNetworkPassphrase, walletClient, selectedContract, addDeployment, deployNetwork, saltMode, manualSalt]);
 
   // ─── Invoke → stream to Terminal (scoped per contract) ───────────────────
 
@@ -584,9 +559,18 @@ const DeployPanel = ({ treeData, fileContents }) => {
       return `--${p.name} ${quoted}`;
     }).join(" ");
     const sendFlag = fn.category === "write" ? " --send=yes" : "";
-    const sourceKey = deployment.wallet && deployment.wallet !== "freighter"
-      ? deployment.wallet
-      : (defaultWallet?.name || "stellar-ide-default");
+    // Prefer the live wallet address (active connected wallet) so invokes
+    // always sign with a key the user controls. Falls back to the address
+    // recorded with the deployment for older entries.
+    const sourceKey = walletAddress || deployment.walletAddress;
+    if (!sourceKey) {
+      setInvokeResults((r) => ({
+        ...r,
+        [contractId]: { ...(r[contractId] || {}), [fn.name]: { error: "Connect an external wallet to invoke." } },
+      }));
+      setInvokingFn((prev) => ({ ...prev, [contractId]: null }));
+      return;
+    }
     const network = deployment.network || DEFAULT_NETWORK;
     const cmd = `stellar contract invoke --id ${contractId} --source ${sourceKey} --network ${network}${sendFlag} -- ${fn.name} ${argStr}`.trim();
     const files = collectProjectFiles(treeData, fileContents);
@@ -632,7 +616,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
       }));
       setInvokingFn((prev) => ({ ...prev, [contractId]: null }));
     }
-  }, [fnArgs, treeData, fileContents, defaultWallet]);
+  }, [fnArgs, treeData, fileContents, walletAddress]);
 
   const setFnArgForContract = useCallback((contractId, fnName, paramName, value) => {
     setFnArgs((prev) => ({
@@ -736,7 +720,6 @@ const DeployPanel = ({ treeData, fileContents }) => {
       id: selectedPresetId || `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
       name,
       alias: alias.trim(),
-      sourceAccount,
       network: deployNetwork,
       saltMode,
       manualSalt: saltMode === "manual" ? manualSalt.trim().toLowerCase() : "",
@@ -749,7 +732,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
       return { ...prev, [path]: [nextPreset, ...withoutSameId].slice(0, 20) };
     });
     setSelectedPresetId(nextPreset.id);
-  }, [selectedContract, presetName, selectedPresetId, alias, sourceAccount, deployNetwork, saltMode, manualSalt]);
+  }, [selectedContract, presetName, selectedPresetId, alias, deployNetwork, saltMode, manualSalt]);
 
   const handleLoadPreset = useCallback((id) => {
     if (!selectedContract?.path) return;
@@ -759,7 +742,6 @@ const DeployPanel = ({ treeData, fileContents }) => {
     setPresetName(preset.name || "");
     setAlias(preset.alias || selectedContract.name || "my-contract");
     aliasEditedRef.current = true;
-    setSourceAccount((preset.sourceAccount === "freighter" ? "wallet" : preset.sourceAccount) || "default");
     setDeployNetwork(preset.network || DEFAULT_NETWORK);
     const mode = preset.saltMode || DEFAULT_SALT_MODE;
     setSaltMode(mode);
@@ -808,39 +790,6 @@ const DeployPanel = ({ treeData, fileContents }) => {
       )}
       {/* ── Wallet ── */}
       <Section icon={<Wallet size={14} />} title="Wallet">
-        <div className="deploy-subsection">
-          <div className="deploy-subsection-label">Default Testnet Account</div>
-          {defaultWallet?.exists ? (
-            <div className="deploy-wallet-card">
-              <div className="deploy-wallet-card-name">
-                <span>{defaultWallet.name}</span>
-                <span className={`deploy-wallet-funded ${defaultWallet.funded ? "funded" : "unfunded"}`}>
-                  {defaultWallet.funded ? "Funded" : "Not Funded"}
-                </span>
-              </div>
-              <div className="deploy-wallet-card-addr">
-                <span>{defaultWallet.address ? `${defaultWallet.address.slice(0,6)}…${defaultWallet.address.slice(-4)}` : ""}</span>
-                <button className="deploy-icon-btn" onClick={() => { navigator.clipboard.writeText(defaultWallet.address); setCopiedDefault(true); setTimeout(() => setCopiedDefault(false), 2000); }}>{copiedDefault ? <Check size={11} /> : <Copy size={11} />}</button>
-              </div>
-              {defaultWallet.balance && (
-                <div className="deploy-wallet-card-balance">
-                  <span className="deploy-balance-amount">{parseFloat(defaultWallet.balance).toFixed(2)}</span>
-                  <span className="deploy-balance-unit">XLM</span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <>
-              <p className="deploy-hint">No default account yet.</p>
-              <button className="deploy-btn deploy-btn-primary" onClick={handleInitWallet} disabled={walletLoading}>
-                {walletLoading ? <Loader size={12} className="spin" /> : <Wallet size={12} />}
-                {walletLoading ? "Creating..." : "Create & Fund Account"}
-              </button>
-            </>
-          )}
-          {walletError && <div className="deploy-error">{errString(walletError)}</div>}
-        </div>
-
         <div className="deploy-subsection">
           <div className="deploy-subsection-label">External Wallet</div>
           <select
@@ -990,16 +939,13 @@ const DeployPanel = ({ treeData, fileContents }) => {
 
         <div className="deploy-form-group">
           <label className="deploy-label">Source Account</label>
-          <select
-            className="deploy-input"
-            value={sourceAccount}
-            onChange={e => setSourceAccount(e.target.value)}
-          >
-            <option value="default">Default — {defaultWallet?.name || "stellar-ide-default"}</option>
-            {walletAddress && (
-              <option value="wallet">{walletProviders.find((w) => w.id === walletProviderId)?.label || "Wallet"} — {walletAddress.slice(0,6)}…{walletAddress.slice(-4)}</option>
-            )}
-          </select>
+          {walletAddress ? (
+            <div className="deploy-hint deploy-hint-mono">
+              {walletProviders.find((w) => w.id === walletProviderId)?.label || "Wallet"} — {walletAddress.slice(0,6)}…{walletAddress.slice(-4)}
+            </div>
+          ) : (
+            <div className="deploy-hint">Connect an external wallet above to deploy.</div>
+          )}
         </div>
 
         <div className="deploy-form-group">
@@ -1078,7 +1024,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
         <button
           className="deploy-btn deploy-btn-primary"
           onClick={handleDeploy}
-          disabled={compileStatus !== "success" || deployStatus === "running"}
+          disabled={compileStatus !== "success" || deployStatus === "running" || !walletAddress}
         >
           {deployStatus === "running" ? <Loader size={14} className="spin" /> : <Rocket size={14} />}
           {deployStatus === "running"
@@ -1086,6 +1032,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
             : (activeForSelected ? "Redeploy" : "Deploy")}
         </button>
         {compileStatus !== "success" && <div className="deploy-hint">Build must succeed first.</div>}
+        {compileStatus === "success" && !walletAddress && <div className="deploy-hint">Connect an external wallet to deploy.</div>}
       </Section>
 
       {/* ── Deployed Contracts (grouped, multi-contract history) ── */}
