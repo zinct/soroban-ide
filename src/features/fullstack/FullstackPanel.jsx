@@ -8,6 +8,7 @@ import DeploymentList from "./DeploymentList";
 import DeploymentDetail from "./DeploymentDetail";
 import NewDeploymentModal from "./NewDeploymentModal";
 import LocalDeployView from "./LocalDeployView";
+import { writeFrontendPreviewEnv, shouldAutoWritePreviewEnv } from "../preview/previewEnvWriter";
 import { detectFrontendRoot } from "./fullstackBundler";
 
 const MODE_KEY = "soroban.fullstackMode";
@@ -185,21 +186,29 @@ const FullstackPanel = ({ treeData, fileContents, setFileContents, setTreeData }
   // offer to auto-inject the new contract ID into the frontend env.
   useEffect(() => {
     const handler = (e) => {
-      const { contractId, name, network } = e.detail || {};
+      const { contractId, name, network, path } = e.detail || {};
       if (!contractId) return;
       const viteNetwork = network === "mainnet" || network === "public"
         ? "MAINNET"
         : "TESTNET";
-      setPendingContract({ contractId, name, network: viteNetwork });
 
-      // Auto-write frontend/.env so in-IDE preview picks up the contract ID
-      // without an extra "Save to .env" click.
-      const envContent = `# Auto-generated after contract deploy\nVITE_CONTRACT_ID=${contractId}\nVITE_NETWORK=${viteNetwork}\n`;
-      writeEnvFile(envContent);
+      if (!shouldAutoWritePreviewEnv(treeData, fileContents, path)) return;
+
+      writeFrontendPreviewEnv({
+        treeData,
+        setFileContents,
+        setTreeData,
+        contractId,
+        network,
+        deployPath: path,
+        fileContents,
+      });
+
+      setPendingContract({ contractId, name, network: viteNetwork });
     };
     window.addEventListener("soroban:contractDeployed", handler);
     return () => window.removeEventListener("soroban:contractDeployed", handler);
-  }, [writeEnvFile]);
+  }, [treeData, fileContents, setFileContents, setTreeData]);
 
   const handleDismiss = useCallback(() => setPendingContract(null), []);
 

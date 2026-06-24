@@ -180,6 +180,104 @@ const isCounterDeployPath = (path, pathHint = "counter") => {
   return p.includes(`${pathHint}/`) || p.endsWith(`/${pathHint}`) || p.endsWith(pathHint);
 };
 
+const deploymentMatchesContractPath = (path, contractPathHint) => {
+  if (!path || !contractPathHint) return false;
+  const p = path.replace(/\\/g, "/");
+  const hint = contractPathHint.replace(/\\/g, "/");
+  return p === hint || p.endsWith(`/${hint}`);
+};
+
+export { deploymentMatchesContractPath };
+
+const deploymentHasMethods = (deployment, methods = []) => {
+  if (!methods.length) return null;
+  const fnNames = new Set((deployment?.functions || []).map((f) => f.name).filter(Boolean));
+  if (fnNames.size === 0) return null;
+  return methods.every((m) => fnNames.has(m));
+};
+
+const findDeploymentByContractId = (history, contractId) => {
+  if (!contractId) return null;
+  for (const group of listGroups(history)) {
+    for (const d of group.deployments) {
+      if (d.id === contractId) {
+        return { ...d, path: group.path };
+      }
+    }
+  }
+  return null;
+};
+
+const deploymentMatchesTemplateSpec = (deployment, spec) => {
+  if (!spec || !deployment) return false;
+  const pathMatch = deploymentMatchesContractPath(deployment.path, spec.contractPath);
+  const writeCheck = deploymentHasMethods(deployment, spec.previewWriteMethods || []);
+  if (writeCheck === true) return true;
+  if (writeCheck === false) return false;
+  return pathMatch;
+};
+
+const deploymentHasExcludedFunctions = (deployment, excluded = []) => {
+  if (!excluded.length) return false;
+  const fnNames = new Set((deployment?.functions || []).map((f) => f.name).filter(Boolean));
+  if (fnNames.size === 0) return false;
+  return excluded.some((name) => fnNames.has(name));
+};
+
+/**
+ * Pick the best deployed contract for a bundled fullstack template.
+ * Matches contract folder path and/or exported write/read methods from deploy metadata.
+ */
+export function getTemplatePreviewContract(history, spec) {
+  if (!spec?.contractPath) return null;
+
+  const requiredMethods = [
+    ...(spec.previewWriteMethods || []),
+    ...(spec.previewReadMethods || []),
+  ];
+  const excluded = spec.excludeFunctions || [];
+
+  const candidates = [];
+  for (const group of listGroups(history)) {
+    const pathMatch = deploymentMatchesContractPath(group.path, spec.contractPath);
+    for (const d of group.deployments) {
+      if (!d?.id?.startsWith("C")) continue;
+      if (deploymentHasExcludedFunctions(d, excluded)) continue;
+      const writeCheck = deploymentHasMethods(d, spec.previewWriteMethods || []);
+      const apiCheck = deploymentHasMethods(d, requiredMethods);
+      if (spec.previewWriteMethods?.length && writeCheck !== true) continue;
+      if (writeCheck === false) continue;
+      if (apiCheck === false) continue;
+      if (apiCheck === null && !pathMatch) continue;
+      candidates.push({
+        contractId: d.id,
+        network: toViteNetwork(d.network),
+        deployedAt: d.deployedAt || 0,
+        status: d.status,
+        verifiedApi: apiCheck === true || writeCheck === true,
+        pathMatch,
+        path: group.path,
+      });
+    }
+  }
+
+  candidates.sort((a, b) => {
+    if (a.verifiedApi !== b.verifiedApi) return a.verifiedApi ? -1 : 1;
+    if (a.pathMatch !== b.pathMatch) return a.pathMatch ? -1 : 1;
+    if ((a.status === "active") !== (b.status === "active")) return a.status === "active" ? -1 : 1;
+    return b.deployedAt - a.deployedAt;
+  });
+
+  const best = candidates[0];
+  if (!best) return null;
+  return {
+    contractId: best.contractId,
+    network: best.network,
+    path: best.path,
+    verifiedApi: best.verifiedApi,
+  };
+};
+
 const deploymentHasCounterApi = (deployment, requiredMethods = ["get", "increment"]) => {
   const fnNames = new Set((deployment?.functions || []).map((f) => f.name).filter(Boolean));
   if (fnNames.size === 0) return null; // unknown — decide via path only
@@ -188,18 +286,57 @@ const deploymentHasCounterApi = (deployment, requiredMethods = ["get", "incremen
 
 /**
  * Resolve which contract the in-IDE preview should use.
- * Priority: valid VITE_CONTRACT_ID in frontend/.env → latest deploy of any contract.
+ * Priority when a template is known:
+ *   deploy of matching contract path → valid .env id → latest deploy.
+ * Without a template: valid .env id → latest deploy.
  */
-export function resolvePreviewContract(history, envFromFiles = {}) {
+export function resolvePreviewContract(history, envFromFiles = {}, options = {}) {
+  const spec = options.templateSpec || null;
+  const freshDeploy = options.freshDeploy || null;
   const envId = (envFromFiles.VITE_CONTRACT_ID || "").toString().trim();
-  if (envId.startsWith("C")) {
-    const envNet = (envFromFiles.VITE_NETWORK || "").toString().trim();
+  const envNet = (envFromFiles.VITE_NETWORK || "").toString().trim();
+
+  if (freshDeploy?.contractId?.startsWith("C") && spec?.contractPath) {
+    if (deploymentMatchesContractPath(freshDeploy.path, spec.contractPath)) {
+      return {
+        contractId: freshDeploy.contractId,
+        network: freshDeploy.network ? toViteNetwork(freshDeploy.network) : undefined,
+        path: freshDeploy.path,
+        source: "deploy",
+        verifiedApi: true,
+      };
+    }
+  }
+
+  const envMatchesTemplate = (contractId) => {
+    if (!spec) return true;
+    if (!contractId?.startsWith("C")) return false;
+    const dep = findDeploymentByContractId(history, contractId);
+    if (!dep) return false;
+    return deploymentMatchesTemplateSpec(dep, spec);
+  };
+
+  if (spec) {
+    const matched = getTemplatePreviewContract(history, spec);
+    if (matched) {
+      if (envId.startsWith("C") && envId === matched.contractId) {
+        return { ...matched, source: "env" };
+      }
+      return { ...matched, source: "deploy" };
+    }
+    return null;
+  }
+
+  if (envId.startsWith("C") && envMatchesTemplate(envId)) {
+    const envDeploy = findDeploymentByContractId(history, envId);
     return {
       contractId: envId,
-      network: envNet ? toViteNetwork(envNet) : undefined,
+      network: envNet ? toViteNetwork(envNet) : (envDeploy ? toViteNetwork(envDeploy.network) : undefined),
       source: "env",
+      path: envDeploy?.path,
     };
   }
+
   const latest = getLatestDeployedContract(history);
   if (latest) return { ...latest, source: "deploy" };
   return null;

@@ -26,6 +26,7 @@ import { bundleFrontendInBrowser } from "../../services/inBrowserBundler";
 import {
   handlePreviewWalletRequest,
   PREVIEW_WALLET_REQUEST,
+  PREVIEW_CONTRACT_SYNC,
 } from "../../services/previewWalletBridge";
 import { dispatchPreviewLog, logPreviewActivity, PREVIEW_LOG_MESSAGE } from "../../services/previewConsoleBridge";
 import { signFreighterTransaction } from "../../services/freighter";
@@ -34,6 +35,7 @@ import { useDeploy } from "../../context/DeployContext";
 import { resolvePreviewContract } from "../deploy/deploymentHistory";
 import {
   fingerprintFrontend,
+  getWorkspacePreviewSpec,
   parsePreviewEnv,
   BUILD_STAGE_ORDER,
   BUILD_STAGE_LABELS,
@@ -69,9 +71,26 @@ const PreviewPanel = ({ treeData, fileContents, isActive = true }) => {
     [detection, fileContents],
   );
 
+  const templateSpec = useMemo(
+    () => getWorkspacePreviewSpec(treeData, fileContents),
+    [treeData, fileContents],
+  );
+
+  const [freshDeploy, setFreshDeploy] = useState(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      const { contractId, network, path } = e.detail || {};
+      if (!contractId?.startsWith("C")) return;
+      setFreshDeploy({ contractId, network, path });
+    };
+    window.addEventListener("soroban:contractDeployed", handler);
+    return () => window.removeEventListener("soroban:contractDeployed", handler);
+  }, []);
+
   const previewContract = useMemo(
-    () => resolvePreviewContract(deploymentHistory, previewEnv),
-    [deploymentHistory, previewEnv],
+    () => resolvePreviewContract(deploymentHistory, previewEnv, { templateSpec, freshDeploy }),
+    [deploymentHistory, previewEnv, templateSpec, freshDeploy],
   );
 
   // "in-ide" — bundle in the browser (default) | "external" — localhost dev server
@@ -138,6 +157,29 @@ const PreviewPanel = ({ treeData, fileContents, isActive = true }) => {
     auxBlobUrlsRef.current = auxUrls.filter(Boolean);
   }, []);
 
+  const postContractToIframe = useCallback(() => {
+    const win = iframeRef.current?.contentWindow;
+    if (!win) return;
+    let id = previewContract?.contractId ?? "";
+    if (templateSpec?.templateId === "savings-circle" && !previewContract?.verifiedApi) {
+      id = "";
+    }
+    win.postMessage({
+      source: "soroban-ide",
+      type: PREVIEW_CONTRACT_SYNC,
+      contractId: id,
+      network: previewContract?.network ?? "",
+    }, "*");
+    if (templateSpec?.templateId === "savings-circle") {
+      logPreviewActivity(
+        id
+          ? `Savings Circle contract → ${shortContractId(id)}`
+          : "Savings Circle: no valid deploy — wire cleared (stale .env ignored)",
+        id ? "info" : "error",
+      );
+    }
+  }, [previewContract, templateSpec]);
+
   const postWalletToIframe = useCallback(() => {
     if (!walletAddress || !iframeRef.current?.contentWindow) return;
     iframeRef.current.contentWindow.postMessage(
@@ -148,15 +190,16 @@ const PreviewPanel = ({ treeData, fileContents, isActive = true }) => {
 
   const handleIframeLoad = useCallback(() => {
     setLoadedOnce(true);
+    postContractToIframe();
     postWalletToIframe();
     logPreviewActivity("[preview] UI loaded — interact with the app to see activity here");
-  }, [postWalletToIframe]);
+  }, [postContractToIframe, postWalletToIframe]);
 
-  // Push wallet updates into the preview when the Deploy panel connects
-  // or switches accounts — blob iframes can't talk to Freighter directly.
+  // Push wallet + resolved contract into the preview iframe (blob origins can't read parent state).
   useEffect(() => {
+    postContractToIframe();
     postWalletToIframe();
-  }, [walletAddress, buildState.phase, reloadCounter, postWalletToIframe]);
+  }, [walletAddress, previewContract, buildState.phase, reloadCounter, postContractToIframe, postWalletToIframe]);
 
   // Route Freighter popups and preview console logs through the parent IDE.
   useEffect(() => {
@@ -189,6 +232,29 @@ const PreviewPanel = ({ treeData, fileContents, isActive = true }) => {
     if (buildInFlightRef.current) return;
     buildInFlightRef.current = true;
     logPreviewActivity("--- Preview rebuild started ---");
+    if (
+      templateSpec
+      && previewEnv.VITE_CONTRACT_ID?.startsWith("C")
+      && previewContract?.contractId !== previewEnv.VITE_CONTRACT_ID
+    ) {
+      logPreviewActivity(
+        `Using deploy for ${templateSpec.contractPath} — stale frontend/.env VITE_CONTRACT_ID ignored`,
+      );
+    }
+    if (templateSpec && !previewContract?.contractId) {
+      logPreviewActivity(
+        `No deploy for ${templateSpec.contractPath} — build WASM, deploy in Deploy panel, then Rebuild`,
+        "error",
+      );
+    }
+    if (templateSpec?.templateId === "savings-circle" && previewContract?.contractId) {
+      logPreviewActivity(`Savings Circle wired to ${shortContractId(previewContract.contractId)}`);
+    } else if (templateSpec?.templateId === "savings-circle" && !previewContract?.contractId) {
+      logPreviewActivity(
+        "Savings Circle needs contracts/savings_circle deployed — stale .env IDs are ignored",
+        "error",
+      );
+    }
     setBuildState({ phase: "building", stage: "collect", message: "Reading workspace files..." });
     setLoadedOnce(false);
     try {
@@ -197,8 +263,9 @@ const PreviewPanel = ({ treeData, fileContents, isActive = true }) => {
           setBuildState({ phase: "building", stage: p.stage, message: p.message });
         },
         walletAddress: walletAddress || undefined,
-        contractId: previewContract?.contractId || undefined,
+        contractId: previewContract?.contractId ?? "",
         network: previewContract?.network,
+        templateId: templateSpec?.templateId,
       });
       setPreviewBlobs(result.blobUrl, result.auxBlobUrls);
       lastBuiltFingerprintRef.current = frontendFingerprint;
@@ -225,7 +292,7 @@ const PreviewPanel = ({ treeData, fileContents, isActive = true }) => {
     } finally {
       buildInFlightRef.current = false;
     }
-  }, [treeData, fileContents, walletAddress, previewContract, frontendFingerprint, setPreviewBlobs]);
+  }, [treeData, fileContents, walletAddress, previewContract, previewEnv, templateSpec, frontendFingerprint, setPreviewBlobs]);
 
   // Listen for "soroban:runInIdeBuild" — opens preview (via Sidebar) then builds.
   useEffect(() => {
@@ -249,6 +316,20 @@ const PreviewPanel = ({ treeData, fileContents, isActive = true }) => {
     const timer = setTimeout(() => runBuild(), 500);
     return () => clearTimeout(timer);
   }, [autoLive, localMode, buildState.phase, frontendFingerprint, runBuild]);
+
+  // Re-bundle when the resolved preview contract changes (e.g. after deploy).
+  const lastPreviewContractRef = useRef(null);
+  useEffect(() => {
+    const id = previewContract?.contractId ?? "";
+    if (localMode !== "in-ide" || buildState.phase !== "ready") {
+      lastPreviewContractRef.current = id;
+      return undefined;
+    }
+    if (lastPreviewContractRef.current === id) return undefined;
+    lastPreviewContractRef.current = id;
+    runBuild();
+    return undefined;
+  }, [previewContract?.contractId, localMode, buildState.phase, runBuild]);
 
   // ⌘/Ctrl+Shift+B — quick rebuild while the preview panel is open.
   useEffect(() => {
@@ -351,9 +432,7 @@ const PreviewPanel = ({ treeData, fileContents, isActive = true }) => {
 
   const showLocalEmpty = detection.kind === "empty";
   const localHasFrontend = detection.kind !== "empty";
-  const hasContract = Boolean(
-    previewContract?.contractId || previewEnv.VITE_CONTRACT_ID?.startsWith("C"),
-  );
+  const hasContract = Boolean(previewContract?.contractId);
   const hasWallet = Boolean(walletAddress);
   const readyToRun = localHasFrontend;
 

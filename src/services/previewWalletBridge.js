@@ -10,9 +10,16 @@ import { logPreviewActivity } from "./previewConsoleBridge";
 export const PREVIEW_WALLET_REQUEST = "soroban:walletRequest";
 export const PREVIEW_WALLET_RESPONSE = "soroban:walletResponse";
 export const PREVIEW_WALLET_SYNC = "soroban:wallet";
+export const PREVIEW_CONTRACT_SYNC = "soroban:contract";
 
 /** Injected into preview HTML so bundled apps can detect the IDE iframe. */
 export const PREVIEW_FLAG_SCRIPT = `<script>window.__SOROBAN_IDE_PREVIEW__=true;</script>`;
+
+/** Seed contract id before the React bundle runs (overrides stale build-time .env). */
+export const buildPreviewContractScript = (contractId = "") => {
+  const id = (contractId ?? "").toString().trim();
+  return `<script>window.__SOROBAN_PREVIEW_CONTRACT__=${JSON.stringify(id)};</script>`;
+};
 
 const FREIGHTER_EXPORTS = [
   "getAddress", "isConnected", "requestAccess", "signTransaction",

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { signTransaction } from "@stellar/freighter-api";
 import { contractId, invokeWrite, networkLabel, simulate } from "./sorobanClient";
 import { useWallet } from "./wallet";
-import { ensureConnected, logAction } from "./previewActions";
+import { applyContractError, ensureConnected, logAction } from "./previewActions";
 
 type Status =
   | { kind: "idle" }
@@ -44,7 +44,7 @@ const App = () => {
       setUi({ kind: "idle" });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setUi({ kind: "error", message });
+      setUi(applyContractError(message, DEPLOY_HINT, "get_total"));
       logAction(`refresh ✗ ${message}`, "error");
     }
   }, [address]);
@@ -64,7 +64,7 @@ const App = () => {
       await refresh();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setUi({ kind: "error", message });
+      setUi(applyContractError(message, DEPLOY_HINT, "tip"));
       logAction(`tip(${amount}) ✗ ${message}`, "error");
     }
   };

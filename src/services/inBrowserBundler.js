@@ -25,6 +25,7 @@ import { FULLSTACK_TEMPLATE_IDS } from "../features/workspace/workspaceTemplates
 import {
   buildPreviewFreighterShimContents,
   PREVIEW_FLAG_SCRIPT,
+  buildPreviewContractScript,
 } from "./previewWalletBridge";
 import { PREVIEW_CONSOLE_SCRIPT } from "./previewConsoleBridge";
 
@@ -38,14 +39,7 @@ const TEMPLATE_FRONTEND_SRC = import.meta.glob(
   { query: "?raw", import: "default", eager: true },
 );
 
-const APP_TEMPLATE_MARKERS = [
-  { id: "fullstack-workshop", needle: "On-chain integer state" },
-  { id: "pay-escrow", needle: "Milestone payments" },
-  { id: "tip-jar", needle: "Support this creator" },
-  { id: "donation-vault", needle: "Transparent giving" },
-  { id: "invoice-split", needle: "Share group expenses" },
-  { id: "savings-circle", needle: "Save together" },
-];
+import { FULLSTACK_APP_MARKERS } from "../features/workspace/fullstackTemplateCatalog";
 
 /** Strip legacy lines that crash Stellar SDK v13 at module load time. */
 const sanitizeLegacyWorkshopSources = (filesMap) => {
@@ -71,8 +65,21 @@ const detectTemplateId = (treeData, filesMap) => {
   const rootName = treeData?.[0]?.name;
   if (rootName && FULLSTACK_TEMPLATE_IDS.includes(rootName)) return rootName;
 
+  const clientSrc = filesMap.get("src/sorobanClient.ts") || "";
+  const CLIENT_HINTS = [
+    { id: "savings-circle", needle: "contracts/savings_circle" },
+    { id: "invoice-split", needle: "contracts/invoice_split" },
+    { id: "donation-vault", needle: "contracts/donation_vault" },
+    { id: "tip-jar", needle: "contracts/tip_jar" },
+    { id: "pay-escrow", needle: "contracts/escrow" },
+    { id: "fullstack-workshop", needle: "contracts/counter" },
+  ];
+  for (const { id, needle } of CLIENT_HINTS) {
+    if (clientSrc.includes(needle)) return id;
+  }
+
   const appSrc = filesMap.get("src/App.tsx") || filesMap.get("src/App.jsx") || "";
-  for (const { id, needle } of APP_TEMPLATE_MARKERS) {
+  for (const { id, needle } of FULLSTACK_APP_MARKERS) {
     if (appSrc.includes(needle)) return id;
   }
   // Split Bill uses JSX split across elements — match class or tagline too
@@ -270,9 +277,17 @@ const parsedEnvFromOptions = (options, parsedEnv) => {
   if (options.walletAddress) {
     env.VITE_WALLET_ADDRESS = options.walletAddress;
   }
-  // Never overwrite a user .env contract id with an empty deploy fallback.
-  if (options.contractId) {
-    env.VITE_CONTRACT_ID = options.contractId;
+  // Never bake stale workspace .env contract ids into fullstack template previews.
+  if (options.templateId) {
+    delete env.VITE_CONTRACT_ID;
+  }
+  // Preview resolver owns VITE_CONTRACT_ID — drop stale workspace .env values.
+  if (options.contractId !== undefined) {
+    if (options.contractId) {
+      env.VITE_CONTRACT_ID = options.contractId;
+    } else {
+      delete env.VITE_CONTRACT_ID;
+    }
   }
   if (options.network && !env.VITE_NETWORK) {
     env.VITE_NETWORK = options.network;
@@ -302,7 +317,7 @@ const needsBufferPolyfill = (filesMap) => {
  * at a blob URL, inject bundled CSS into `<head>`, and add preview bootstrap
  * scripts (console bridge + wallet flag).
  */
-const composeFinalHtml = (indexHtml, jsModuleUrl, cssContent) => {
+const composeFinalHtml = (indexHtml, jsModuleUrl, cssContent, previewContractId = "") => {
   let html = indexHtml;
 
   const scriptRe = /<script\s+type="module"\s+src="[^"]+"\s*><\/script>/i;
@@ -324,10 +339,11 @@ const composeFinalHtml = (indexHtml, jsModuleUrl, cssContent) => {
     }
   }
 
+  const previewBootstrap = `${PREVIEW_FLAG_SCRIPT}\n${buildPreviewContractScript(previewContractId)}\n${PREVIEW_CONSOLE_SCRIPT}`;
   if (html.includes("</head>")) {
-    html = html.replace("</head>", `${PREVIEW_FLAG_SCRIPT}\n${PREVIEW_CONSOLE_SCRIPT}\n</head>`);
+    html = html.replace("</head>", `${previewBootstrap}\n</head>`);
   } else {
-    html = PREVIEW_FLAG_SCRIPT + "\n" + PREVIEW_CONSOLE_SCRIPT + "\n" + html;
+    html = previewBootstrap + "\n" + html;
   }
 
   return html;
@@ -377,6 +393,8 @@ export async function bundleFrontendInBrowser(treeData, fileContents, options = 
   patchLegacySorobanClient(filesMap);
   sanitizeLegacyWorkshopSources(filesMap);
 
+  const templateId = detectTemplateId(treeData, filesMap);
+
   if (!indexHtml) {
     throw new Error(
       "index.html not found at the frontend root — the bundler needs one to know where to start.",
@@ -408,7 +426,7 @@ export async function bundleFrontendInBrowser(treeData, fileContents, options = 
 
   onProgress({ stage: "bundle", message: "Compiling sources & resolving npm imports..." });
 
-  const env = parsedEnvFromOptions(options, parsedEnv);
+  const env = parsedEnvFromOptions({ ...options, templateId }, parsedEnv);
   const useBufferPolyfill = needsBufferPolyfill(filesMap);
   if (env.VITE_CONTRACT_ID && env.VITE_CONTRACT_ID.startsWith("G")) {
     throw new Error(
@@ -477,7 +495,7 @@ export async function bundleFrontendInBrowser(treeData, fileContents, options = 
   const jsBlobUrl = URL.createObjectURL(
     new Blob([jsContent], { type: "text/javascript" }),
   );
-  const finalHtml = composeFinalHtml(indexHtml, jsBlobUrl, cssContent);
+  const finalHtml = composeFinalHtml(indexHtml, jsBlobUrl, cssContent, options.contractId ?? "");
 
   const blob = new Blob([finalHtml], { type: "text/html" });
   const blobUrl = URL.createObjectURL(blob);

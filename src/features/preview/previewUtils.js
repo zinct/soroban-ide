@@ -1,4 +1,9 @@
-import { collectPreviewFiles } from "../fullstack/fullstackBundler";
+import { collectPreviewFiles, detectFrontendRoot } from "../fullstack/fullstackBundler";
+import {
+  FULLSTACK_APP_MARKERS,
+  getFullstackPreviewSpec,
+} from "../workspace/fullstackTemplateCatalog";
+import { FULLSTACK_TEMPLATE_IDS } from "../workspace/workspaceTemplates";
 
 const parseEnvLine = (text) => {
   const env = {};
@@ -19,6 +24,38 @@ const parseEnvLine = (text) => {
     if (key) env[key] = value;
   }
   return env;
+};
+
+/** Detect which bundled fullstack template the open workspace uses (if any). */
+export const detectWorkspaceTemplate = (treeData, fileContents) => {
+  const rootName = treeData?.[0]?.name;
+  if (rootName && FULLSTACK_TEMPLATE_IDS.includes(rootName)) {
+    return rootName;
+  }
+  const normalizedRoot = (rootName || "").toLowerCase().replace(/_/g, "-");
+  if (normalizedRoot && FULLSTACK_TEMPLATE_IDS.includes(normalizedRoot)) {
+    return normalizedRoot;
+  }
+
+  const detection = detectFrontendRoot(treeData);
+  if (!detection?.folder || detection.kind === "empty") return null;
+
+  const files = collectPreviewFiles(detection.folder, fileContents || {});
+  const appFile = files.find(({ path }) => /(?:^|\/)App\.tsx$/.test(path));
+  const appSrc = appFile?.content || "";
+  if (!appSrc) return null;
+
+  for (const { id, needle } of FULLSTACK_APP_MARKERS) {
+    if (appSrc.includes(needle)) return id;
+  }
+  if (appSrc.includes("Split") && appSrc.includes("Bill")) return "invoice-split";
+  return null;
+};
+
+/** Preview contract spec for the detected workspace template. */
+export const getWorkspacePreviewSpec = (treeData, fileContents) => {
+  const templateId = detectWorkspaceTemplate(treeData, fileContents);
+  return templateId ? getFullstackPreviewSpec(templateId) : null;
 };
 
 /** Read merged VITE_* values from frontend .env files in the workspace. */

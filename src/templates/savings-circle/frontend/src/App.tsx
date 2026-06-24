@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { signTransaction } from "@stellar/freighter-api";
-import { contractId, invokeWrite, networkLabel, simulate } from "./sorobanClient";
+import {
+  invokeWrite,
+  networkLabel,
+  simulate,
+  useContractId,
+  validateSavingsCircleContract,
+} from "./sorobanClient";
 import { useWallet } from "./wallet";
-import { ensureConnected, logAction } from "./previewActions";
+import { applyContractError, ensureConnected, logAction } from "./previewActions";
 
 type Status =
   | { kind: "idle" }
@@ -12,54 +18,71 @@ type Status =
   | { kind: "setup"; title: string; message: string };
 
 const short = (s: string) => (s.length > 14 ? `${s.slice(0, 6)}…${s.slice(-4)}` : s);
-const DEPLOY_HINT = "Deploy contracts/savings_circle, build WASM, deploy, then Rebuild preview.";
+const DEPLOY_HINT = "Deploy contracts/savings_circle in the Deploy panel, build WASM, deploy, then Rebuild preview.";
 const RING = 2 * Math.PI * 54;
 const QUICK = [10, 20, 50];
 const GOAL = 200;
 
 const App = () => {
+  const contractId = useContractId();
   const { address, detecting, connect } = useWallet();
   const [total, setTotal] = useState<number | null>(null);
   const [contributions, setContributions] = useState<number | null>(null);
   const [amount, setAmount] = useState("20");
+  const [contractReady, setContractReady] = useState(false);
   const [ui, setUi] = useState<Status>({ kind: "idle" });
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<boolean> => {
     if (!contractId) {
+      setContractReady(false);
       setUi({ kind: "setup", title: "Deploy Savings Circle", message: DEPLOY_HINT });
-      return;
+      return false;
     }
     if (!address) {
       setTotal(null);
+      setContributions(null);
+      setContractReady(false);
       setUi({ kind: "idle" });
-      return;
+      return false;
     }
-    logAction("refresh → simulate get_total(), get_contribution_count()");
+    logAction(`refresh → validate savings_circle on ${contractId.slice(0, 6)}…`);
     setUi({ kind: "loading", label: "Loading" });
     try {
+      await validateSavingsCircleContract(address);
       const [t, c] = await Promise.all([
         simulate<number | bigint>("get_total", address),
         simulate<number | bigint>("get_contribution_count", address),
       ]);
       setTotal(Number(t));
       setContributions(Number(c));
+      setContractReady(true);
       setUi({ kind: "idle" });
+      return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setUi({ kind: "error", message });
+      setContractReady(false);
+      setTotal(null);
+      setContributions(null);
+      setUi(applyContractError(message, DEPLOY_HINT, "contribute"));
       logAction(`refresh ✗ ${message}`, "error");
+      return false;
     }
-  }, [address]);
+  }, [address, contractId]);
 
   useEffect(() => {
     if (!detecting) refresh();
-  }, [refresh, detecting]);
+  }, [refresh, detecting, contractId]);
 
   const contribute = async () => {
+    if (!contractReady) {
+      const ok = await refresh();
+      if (!ok) return;
+    }
     const value = Math.max(1, parseInt(amount, 10) || 0);
     setUi({ kind: "loading", label: "Contributing" });
     try {
       const wallet = await ensureConnected(address, connect);
+      await validateSavingsCircleContract(wallet);
       logAction(`contribute(${value}) → Freighter sign`);
       await invokeWrite("contribute", wallet, signTransaction, [value]);
       setUi({ kind: "ok", message: `Contributed ${value} to the pool` });
@@ -67,7 +90,8 @@ const App = () => {
       await refresh();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setUi({ kind: "error", message });
+      setContractReady(false);
+      setUi(applyContractError(message, DEPLOY_HINT, "contribute"));
       logAction(`contribute(${value}) ✗ ${message}`, "error");
     }
   };
@@ -129,6 +153,9 @@ const App = () => {
                   </div>
                 </div>
                 <span className="hero-meta">{contributions ?? 0} contributions</span>
+                {!address && (
+                  <p className="hero-meta" style={{ marginTop: 8 }}>Connect wallet to load the pool</p>
+                )}
               </div>
 
               <div className="panel">
@@ -141,7 +168,14 @@ const App = () => {
                 <label className="field-label" htmlFor="contrib">Amount</label>
                 <div className="input-inline">
                   <input id="contrib" className="field" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
-                  <button type="button" className="btn btn-primary" onClick={contribute} disabled={detecting}>Contribute</button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={contribute}
+                    disabled={detecting || !address || !contractReady || ui.kind === "loading"}
+                  >
+                    Contribute
+                  </button>
                 </div>
                 <button type="button" className="btn btn-ghost btn-block" style={{ marginTop: 8 }} onClick={refresh} disabled={!address}>Refresh</button>
               </div>

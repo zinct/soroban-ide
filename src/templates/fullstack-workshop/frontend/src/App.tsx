@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { signTransaction } from "@stellar/freighter-api";
 import { contractId, invokeWrite, networkLabel, simulate } from "./sorobanClient";
 import { useWallet } from "./wallet";
-import { ensureConnected, logAction } from "./previewActions";
+import { applyContractError, ensureConnected, logAction } from "./previewActions";
 
 type Status =
   | { kind: "idle" }
@@ -12,8 +12,7 @@ type Status =
   | { kind: "setup"; title: string; message: string };
 
 const short = (s: string) => (s.length > 14 ? `${s.slice(0, 6)}…${s.slice(-4)}` : s);
-const isWrongContractMessage = (message: string) =>
-  /does not have a "get" function|non-existent contract function|MissingValue/i.test(message);
+const DEPLOY_HINT = "Deploy contracts/counter in the Deploy panel, set VITE_CONTRACT_ID, then Rebuild preview.";
 
 const App = () => {
   const { address, detecting, connect } = useWallet();
@@ -43,12 +42,9 @@ const App = () => {
       logAction(`refresh ✓ counter = ${Number(value)}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      if (isWrongContractMessage(message)) {
-        setStatus({ kind: "setup", title: "Wrong contract linked", message: "Deploy contracts/counter, then Rebuild preview." });
-        setCount(null);
-        return;
-      }
-      setStatus({ kind: "error", message });
+      const next = applyContractError(message, DEPLOY_HINT, "get");
+      if (next.kind === "setup") setCount(null);
+      setStatus(next);
       logAction(`refresh ✗ ${message}`, "error");
     }
   }, [address]);
@@ -81,11 +77,9 @@ const App = () => {
       logAction(`${method}() ✓ new value ${Number(next)}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      if (isWrongContractMessage(message)) {
-        setStatus({ kind: "setup", title: "Wrong contract linked", message: "Deploy contracts/counter, then Rebuild preview." });
-        return;
-      }
-      setStatus({ kind: "error", message });
+      const next = applyContractError(message, DEPLOY_HINT, method);
+      if (next.kind === "setup") setCount(null);
+      setStatus(next);
       logAction(`${method}() ✗ ${message}`, "error");
     }
   };

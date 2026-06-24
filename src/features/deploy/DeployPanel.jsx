@@ -27,6 +27,7 @@ import {
   findReadmePath,
   appendDeploymentToReadme,
 } from "./readmeDeployWriter";
+import { writeFrontendPreviewEnv } from "../preview/previewEnvWriter";
 
 const CONTRACT_STORAGE_KEY = "soroban:selectedContract";
 const DEPLOY_PRESETS_KEY = "soroban:deploy_presets";
@@ -117,7 +118,7 @@ const Section = ({ icon, title, children, defaultOpen = false, badge }) => {
   );
 };
 
-const DeployPanel = ({ treeData, fileContents, setFileContents }) => {
+const DeployPanel = ({ treeData, fileContents, setFileContents, setTreeData }) => {
   const {
     compileStatus, setCompileStatus,
     deployStatus, setDeployStatus,
@@ -574,6 +575,18 @@ const DeployPanel = ({ treeData, fileContents, setFileContents }) => {
         await recordDeploy(result.contractId);
         appendTerminal("output", `📋 Contract ID: ${result.contractId}`);
 
+        if (writeFrontendPreviewEnv({
+          treeData,
+          setFileContents,
+          setTreeData,
+          contractId: result.contractId,
+          network: deployNetwork,
+          deployPath: deployMeta.path,
+          fileContents,
+        })) {
+          appendTerminal("output", "🔗 Updated frontend/.env for in-IDE preview");
+        }
+
         // Auto-append deployment info to README.md
         if (setFileContents) {
           try {
@@ -614,7 +627,7 @@ const DeployPanel = ({ treeData, fileContents, setFileContents }) => {
     } finally {
       window.dispatchEvent(new Event("soroban:terminalIdle"));
     }
-  }, [treeData, fileContents, alias, walletAddress, walletProviderId, walletNetworkPassphrase, walletClient, selectedContract, addDeployment, deployNetwork, saltMode, manualSalt, setFileContents]);
+  }, [treeData, fileContents, alias, walletAddress, walletProviderId, walletNetworkPassphrase, walletClient, selectedContract, addDeployment, deployNetwork, saltMode, manualSalt, setFileContents, setTreeData]);
 
   // ─── Invoke → stream to Terminal (scoped per contract) ───────────────────
 

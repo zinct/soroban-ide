@@ -1,6 +1,7 @@
 /**
  * Soroban RPC client with u32-safe args, preview action logging, and Freighter signing.
  */
+import { getContractId, useContractId } from "./contractRuntime";
 import {
   Contract,
   Networks,
@@ -11,6 +12,8 @@ import {
   nativeToScVal,
   BASE_FEE,
 } from "@stellar/stellar-sdk";
+
+export { useContractId };
 
 const NETWORK = (import.meta.env.VITE_NETWORK ?? "TESTNET").toString().toUpperCase();
 const CONTRACT_ID = (import.meta.env.VITE_CONTRACT_ID ?? "").toString();
@@ -65,6 +68,9 @@ const formatRpcError = (err: unknown, context: string): Error => {
       + "Use @stellar/stellar-sdk ^15.1.0+, then Rebuild preview.",
     );
   }
+  if (/non-existent contract function/i.test(message)) {
+    return new Error(`${context}: ${message}. ${DEPLOY_HINT}`);
+  }
   if (/unreachable|invalidaction|vm call trapped/i.test(message)) {
     return new Error(
       `${context}: Contract rejected the call (${message}). `
@@ -77,13 +83,14 @@ const formatRpcError = (err: unknown, context: string): Error => {
 };
 
 const requireContract = () => {
-  if (!CONTRACT_ID) {
+  const id = getContractId();
+  if (!id) {
     throw new Error(`VITE_CONTRACT_ID is not set — ${DEPLOY_HINT}`);
   }
-  if (CONTRACT_ID.startsWith("G")) {
+  if (id.startsWith("G")) {
     throw new Error("VITE_CONTRACT_ID looks like a wallet (G…). Use the contract ID from Deploy (C…).");
   }
-  return new Contract(CONTRACT_ID);
+  return new Contract(id);
 };
 
 export const simulate = async <T = unknown>(
@@ -148,7 +155,11 @@ export const invokeWrite = async <T = unknown>(
     // Simulate before Freighter — surfaces arg/type errors without a wallet popup.
     const preSim = await server.simulateTransaction(tx);
     if (rpc.Api.isSimulationError(preSim)) {
-      throw new Error(preSim.error || "Pre-sign simulation failed");
+      const err = preSim.error || "Pre-sign simulation failed";
+      if (/non-existent contract function/i.test(err)) {
+        throw new Error(`No "${method}" on this contract. ${DEPLOY_HINT}`);
+      }
+      throw new Error(err);
     }
 
     const prepared = await server.prepareTransaction(tx);
