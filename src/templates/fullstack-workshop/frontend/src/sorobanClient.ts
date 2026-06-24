@@ -1,10 +1,5 @@
 /**
- * Thin wrapper around the Stellar SDK for talking to a Soroban contract.
- *
- * Read-only methods (e.g. `get`) use the RPC's `simulateTransaction` endpoint
- * and never touch the wallet. Write methods build a real transaction, ask
- * Freighter to sign it, then submit it through `sendTransaction` and poll
- * until the network confirms.
+ * Soroban RPC client with u32-safe args, preview action logging, and Freighter signing.
  */
 import {
   Contract,
@@ -13,11 +8,13 @@ import {
   rpc,
   xdr,
   scValToNative,
+  nativeToScVal,
   BASE_FEE,
 } from "@stellar/stellar-sdk";
 
 const NETWORK = (import.meta.env.VITE_NETWORK ?? "TESTNET").toString().toUpperCase();
 const CONTRACT_ID = (import.meta.env.VITE_CONTRACT_ID ?? "").toString();
+const DEPLOY_HINT = "Deploy contracts/counter in the Deploy panel, set VITE_CONTRACT_ID, then Rebuild preview.";
 
 const NETWORK_CONFIG = {
   TESTNET: {
@@ -40,12 +37,40 @@ export const contractId = CONTRACT_ID;
 
 export const server = new rpc.Server(config.rpcUrl, { allowHttp: false });
 
+const formatMethod = (method: string, args: unknown[]) =>
+  args.length ? `${method}(${args.join(", ")})` : method;
+
+/**
+ * Soroban u32 params must be ScVal U32.
+ * nativeToScVal(100) defaults to U64 in SDK v15 — passing that to a u32 param traps the VM.
+ */
+const argsToScVals = (args: unknown[]): xdr.ScVal[] =>
+  args.map((arg) => {
+    if (typeof arg === "number" && Number.isInteger(arg) && arg >= 0 && arg <= 0xffffffff) {
+      return nativeToScVal(arg >>> 0, { type: "u32" });
+    }
+    if (typeof arg === "bigint" && arg >= 0n && arg <= 0xffffffffn) {
+      return nativeToScVal(Number(arg), { type: "u32" });
+    }
+    return nativeToScVal(arg);
+  });
+
+const scValTypeName = (val: xdr.ScVal) => val.switch().name;
+
 const formatRpcError = (err: unknown, context: string): Error => {
   const message = err instanceof Error ? err.message : String(err);
   if (/bad union switch/i.test(message)) {
     return new Error(
-      `${context}: Stellar SDK is too old to read testnet responses (Bad union switch). `
-      + "Update @stellar/stellar-sdk to ^15.1.0 or newer in frontend/package.json, then Rebuild preview.",
+      `${context}: Stellar SDK is too old (Bad union switch). `
+      + "Use @stellar/stellar-sdk ^15.1.0+, then Rebuild preview.",
+    );
+  }
+  if (/unreachable|invalidaction|vm call trapped/i.test(message)) {
+    return new Error(
+      `${context}: Contract rejected the call (${message}). `
+      + "If this is a write with a numeric amount, rebuild preview (U32 encoding fix) "
+      + "and redeploy the contract WASM. "
+      + DEPLOY_HINT,
     );
   }
   return err instanceof Error ? err : new Error(message);
@@ -53,23 +78,22 @@ const formatRpcError = (err: unknown, context: string): Error => {
 
 const requireContract = () => {
   if (!CONTRACT_ID) {
-    throw new Error(
-      "VITE_CONTRACT_ID is not set — deploy the counter contract first and put its ID in your .env",
-    );
+    throw new Error(`VITE_CONTRACT_ID is not set — ${DEPLOY_HINT}`);
   }
   if (CONTRACT_ID.startsWith("G")) {
-    throw new Error(
-      "VITE_CONTRACT_ID looks like a wallet address (G…). Use the contract ID from the Deploy panel (starts with C…).",
-    );
+    throw new Error("VITE_CONTRACT_ID looks like a wallet (G…). Use the contract ID from Deploy (C…).");
   }
   return new Contract(CONTRACT_ID);
 };
 
-/**
- * Run a Soroban method as a read-only simulation. Used for "view" functions
- * that don't need to sign or submit anything.
- */
-export const simulate = async <T = unknown>(method: string, source: string): Promise<T> => {
+export const simulate = async <T = unknown>(
+  method: string,
+  source: string,
+  args: unknown[] = [],
+): Promise<T> => {
+  const label = formatMethod(method, args);
+  const scVals = argsToScVals(args);
+  console.log(`[contract] simulate ${label}`, args.length ? `(arg types: ${scVals.map(scValTypeName).join(", ")})` : "");
   try {
     const contract = requireContract();
     const account = await server.getAccount(source);
@@ -77,7 +101,7 @@ export const simulate = async <T = unknown>(method: string, source: string): Pro
       fee: BASE_FEE,
       networkPassphrase: config.networkPassphrase,
     })
-      .addOperation(contract.call(method))
+      .addOperation(contract.call(method, ...scVals))
       .setTimeout(30)
       .build();
 
@@ -85,35 +109,30 @@ export const simulate = async <T = unknown>(method: string, source: string): Pro
     if (rpc.Api.isSimulationError(sim)) {
       const err = sim.error || "Simulation failed";
       if (/non-existent contract function/i.test(err)) {
-        throw new Error(
-          `This contract does not have a "${method}" function. `
-          + "Deploy your contract in the Deploy panel, set VITE_CONTRACT_ID in .env, then Rebuild preview.",
-        );
+        throw new Error(`No "${method}" on this contract. ${DEPLOY_HINT}`);
       }
       throw new Error(`Simulation failed: ${err}`);
     }
     const retval = (sim as rpc.Api.SimulateTransactionSuccessResponse).result?.retval;
     if (!retval) throw new Error("Simulation returned no value");
-    return scValToNative(retval) as T;
+    const value = scValToNative(retval) as T;
+    console.log(`[contract] simulate ${label} ✓`, value);
+    return value;
   } catch (err) {
-    throw formatRpcError(err, "Read call failed");
+    console.error(`[contract] simulate ${label} ✗`, err);
+    throw formatRpcError(err, `Read ${label} failed`);
   }
 };
 
-/**
- * Build a write transaction, hand it to the signer, submit, and poll until
- * it lands on-chain (or fails). Returns the decoded return value.
- *
- * @param method   contract method name (e.g. "increment")
- * @param source   public key of the source account (will pay the fee + sign)
- * @param signXDR  callback that takes the unsigned XDR and resolves to a
- *                 signed XDR — typically Freighter's `signTransaction`.
- */
 export const invokeWrite = async <T = unknown>(
   method: string,
   source: string,
   signXDR: (xdr: string, opts: { networkPassphrase: string; address: string }) => Promise<string | { signedTxXdr?: string }>,
+  args: unknown[] = [],
 ): Promise<T> => {
+  const label = formatMethod(method, args);
+  const scVals = argsToScVals(args);
+  console.log(`[contract] invoke ${label}`, `(arg types: ${scVals.map(scValTypeName).join(", ") || "none"})`);
   try {
     const contract = requireContract();
     const account = await server.getAccount(source);
@@ -122,12 +141,18 @@ export const invokeWrite = async <T = unknown>(
       fee: BASE_FEE,
       networkPassphrase: config.networkPassphrase,
     })
-      .addOperation(contract.call(method))
+      .addOperation(contract.call(method, ...scVals))
       .setTimeout(60)
       .build();
 
-    const prepared = await server.prepareTransaction(tx);
+    // Simulate before Freighter — surfaces arg/type errors without a wallet popup.
+    const preSim = await server.simulateTransaction(tx);
+    if (rpc.Api.isSimulationError(preSim)) {
+      throw new Error(preSim.error || "Pre-sign simulation failed");
+    }
 
+    const prepared = await server.prepareTransaction(tx);
+    console.log(`[contract] invoke ${label} → Freighter sign popup`);
     const signed = await signXDR(prepared.toXDR(), {
       networkPassphrase: config.networkPassphrase,
       address: source,
@@ -135,6 +160,7 @@ export const invokeWrite = async <T = unknown>(
     const signedXdr = typeof signed === "string" ? signed : signed.signedTxXdr ?? "";
     if (!signedXdr) throw new Error("Wallet returned an empty signed XDR");
 
+    console.log(`[contract] invoke ${label} → submitting`);
     const finalTx = TransactionBuilder.fromXDR(signedXdr, config.networkPassphrase);
     const sent = await server.sendTransaction(finalTx);
     if (sent.status === "ERROR") {
@@ -153,8 +179,11 @@ export const invokeWrite = async <T = unknown>(
     }
 
     const retval: xdr.ScVal | undefined = getResp.returnValue;
-    return (retval ? scValToNative(retval) : undefined) as T;
+    const result = (retval ? scValToNative(retval) : undefined) as T;
+    console.log(`[contract] invoke ${label} ✓ confirmed`, result ?? "(no return value)");
+    return result;
   } catch (err) {
-    throw formatRpcError(err, "Write call failed");
+    console.error(`[contract] invoke ${label} ✗`, err);
+    throw formatRpcError(err, `Write ${label} failed`);
   }
 };

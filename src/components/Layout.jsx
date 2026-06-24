@@ -7,14 +7,18 @@ import {
   createDefaultWorkspace,
   createBlankWorkspace,
   createHelloWorldWorkspace,
-  createFullstackWorkshopWorkspace,
+  createFullstackTemplateWorkspace,
+  FULLSTACK_TEMPLATE_IDS,
 } from "../features/workspace/workspaceTemplates";
+import FullstackExamplesModal from "../features/fullstack/FullstackExamplesModal";
 
 // Templates bundled into the frontend via Vite glob. Anything in this map
 // is served immediately and never hits the backend `/api/templates` endpoint.
 const LOCAL_TEMPLATE_FACTORIES = {
   "hello-world": createHelloWorldWorkspace,
-  "fullstack-workshop": createFullstackWorkshopWorkspace,
+  ...Object.fromEntries(
+    FULLSTACK_TEMPLATE_IDS.map((id) => [id, () => createFullstackTemplateWorkspace(id)]),
+  ),
 };
 import { cloneRepository } from "../services/githubService";
 import { FileIconImg, FolderIconImg } from "../components/icons/FileIcon";
@@ -43,6 +47,7 @@ const Layout = () => {
 
   const [cursorInfo, setCursorInfo] = useState({ lineNumber: 1, column: 1, selectedChars: 0 });
   const [showCreateMenu, setShowCreateMenu] = useState(false);
+  const [showFullstackExamples, setShowFullstackExamples] = useState(false);
   const [showGithubClone, setShowGithubClone] = useState(false);
   const [githubUrl, setGithubUrl] = useState("");
   const [cloneStatus, setCloneStatus] = useState(null);
@@ -107,7 +112,7 @@ const Layout = () => {
 
   // Handle body scroll blocking for all modals
   useEffect(() => {
-    const isAnyModalOpen = palette.isOpen || showGithubClone || confirmModal.isOpen || isSettingsOpen;
+    const isAnyModalOpen = palette.isOpen || showGithubClone || confirmModal.isOpen || isSettingsOpen || showFullstackExamples;
     if (isAnyModalOpen) {
       document.body.style.overflow = "hidden";
     } else {
@@ -116,7 +121,7 @@ const Layout = () => {
     return () => {
       document.body.style.overflow = "";
     };
-  }, [palette.isOpen, showGithubClone, confirmModal.isOpen, isSettingsOpen]);
+  }, [palette.isOpen, showGithubClone, confirmModal.isOpen, isSettingsOpen, showFullstackExamples]);
 
   // Handle delete with tab cleanup
   const handleDeleteItem = useCallback(
@@ -423,8 +428,14 @@ const Layout = () => {
         run: () => handleCreateProject("stellar-workshop"),
       },
       {
+        id: "project.browseFullstackExamples",
+        title: "Browse Fullstack Examples…",
+        category: "Project",
+        run: () => setShowFullstackExamples(true),
+      },
+      {
         id: "project.createFullstackWorkshop",
-        title: "Create Fullstack Workshop (Contract + Frontend)",
+        title: "Create Soroban Counter (Fullstack)",
         category: "Project",
         run: () => handleCreateProject("fullstack-workshop"),
       },
@@ -482,15 +493,6 @@ const Layout = () => {
         run: () => {
           if (isSettingsOpen) setIsSettingsOpen(false);
           dispatch("soroban:setSidebarPanel", { panel: "preview" });
-        },
-      },
-      {
-        id: "view.showFullstack",
-        title: "Open Fullstack (Vercel) Panel",
-        category: "View",
-        run: () => {
-          if (isSettingsOpen) setIsSettingsOpen(false);
-          dispatch("soroban:setSidebarPanel", { panel: "fullstack" });
         },
       },
       {
@@ -665,7 +667,7 @@ const Layout = () => {
                       <div
                         className="create-new-item"
                         onClick={() => {
-                          handleCreateProject("fullstack-workshop");
+                          setShowFullstackExamples(true);
                           setShowCreateMenu(false);
                         }}>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -674,7 +676,7 @@ const Layout = () => {
                           <path d="M14 14h7v7h-7z" />
                           <path d="M3 14h7v7H3z" />
                         </svg>
-                        Create Fullstack Workshop
+                        Browse Fullstack Examples
                       </div>
                       <div className="create-new-item" onClick={handleOpenGithubClone}>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -738,6 +740,13 @@ const Layout = () => {
           </div>
         </div>
       </div>
+
+      {showFullstackExamples && (
+        <FullstackExamplesModal
+          onClose={() => setShowFullstackExamples(false)}
+          onCreate={(templateId) => handleCreateProject(templateId)}
+        />
+      )}
 
       <CommandPalette isOpen={palette.isOpen} mode={palette.mode} commands={paletteCommands} files={paletteFiles} onClose={closePalette} onOpenFile={handlePaletteOpenFile} />
 
