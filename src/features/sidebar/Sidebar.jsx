@@ -14,15 +14,13 @@ const PANEL_WIDTHS = {
   github: 450,
   tutorial: 620,
   deploy: 500,
-  fullstack: 560,
   preview: 560,
   validation: 500,
 };
-import { Settings, BookOpen, Rocket, CheckCircle2, Triangle, Monitor } from "lucide-react";
+import { Settings, BookOpen, Rocket, CheckCircle2, Monitor } from "lucide-react";
 import TutorialPanel from "../tutorial/TutorialPanel";
 import DeployPanel from "../deploy/DeployPanel";
 import ValidationPanel from "../validation/ValidationPanel";
-import FullstackPanel from "../fullstack/FullstackPanel";
 import PreviewPanel from "../preview/PreviewPanel";
 
 const ActionButton = memo(({ icon, onClick, title }) => (
@@ -55,7 +53,11 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
   }, [width, isCollapsed]);
   const [isDragging, setIsDragging] = useState(false);
   const [inlineInput, setInlineInput] = useState(null);
-  const [activePanel, setActivePanel] = useState(() => persistedSidebarState?.activePanel || "explorer"); // "explorer" | "github" | "tutorial"
+  const [activePanel, setActivePanel] = useState(() => {
+    const saved = persistedSidebarState?.activePanel || "explorer";
+    // Fullstack (Vercel) panel removed — fall back to Preview.
+    return saved === "fullstack" ? "preview" : saved;
+  });
   const [contextMenu, setContextMenu] = useState(null);
   const [renameNode, setRenameNode] = useState(null);
   const [dragState, setDragState] = useState({ draggingId: null, dragOverId: null });
@@ -249,7 +251,8 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
 
     const handleToggle = () => toggleCollapse();
     const handleSetPanel = (e) => {
-      const panel = e.detail?.panel;
+      let panel = e.detail?.panel;
+      if (panel === "fullstack") panel = "preview";
       if (!panel || !PANEL_WIDTHS[panel]) return;
       if (isCollapsed || activePanel !== panel) {
         setIsCollapsed(false);
@@ -703,21 +706,6 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
           </button>
 
           <button
-            className={`activity-btn ${activePanel === "fullstack" && !isCollapsed ? "active" : ""}`}
-            onClick={() => {
-              if (isCollapsed || activePanel !== "fullstack") {
-                setIsCollapsed(false);
-                setWidth(PANEL_WIDTHS.fullstack);
-                setActivePanel("fullstack");
-              } else {
-                toggleCollapse();
-              }
-            }}
-            title="Fullstack (Vercel)">
-            <Triangle size={24} fill="currentColor" />
-          </button>
-
-          <button
             className={`activity-btn ${activePanel === "preview" && !isCollapsed ? "active" : ""}`}
             onClick={() => {
               if (isCollapsed || activePanel !== "preview") {
@@ -772,20 +760,6 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
               </div>
               <div className="sidebar-body" style={{ overflowY: "auto" }}>
                 <DeployPanel treeData={treeData || tree} fileContents={fileContents || {}} />
-              </div>
-            </>
-          ) : activePanel === "fullstack" ? (
-            <>
-              <div className="sidebar-header">
-                <div className="sidebar-title">Fullstack</div>
-              </div>
-              <div className="sidebar-body" style={{ overflowY: "auto" }}>
-                <FullstackPanel
-                  treeData={treeData || tree}
-                  fileContents={fileContents || {}}
-                  setFileContents={setFileContents}
-                  setTreeData={setTreeData}
-                />
               </div>
             </>
           ) : activePanel === "preview" ? (

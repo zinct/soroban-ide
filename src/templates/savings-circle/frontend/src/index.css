@@ -1,0 +1,43 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap");
+
+:root {
+  color-scheme: light;
+  --bg: #f5f3ff;
+  --surface: #ffffff;
+  --surface-raised: #faf5ff;
+  --border: #e9e5ff;
+  --text: #1e1b4b;
+  --muted: #6366a0;
+  --accent: #6366f1;
+  --accent-fg: #ffffff;
+  --accent-ring: rgba(99, 102, 241, 0.12);
+  --icon-bg: rgba(99, 102, 241, 0.12);
+  --icon-fg: #6366f1;
+  --success: #059669;
+  --success-bg: rgba(5, 150, 105, 0.1);
+  --error: #dc2626;
+  --error-bg: rgba(220, 38, 38, 0.08);
+  --progress-bg: rgba(99, 102, 241, 0.12);
+  --chip-bg: #faf5ff;
+  --btn-hover: #faf5ff;
+  font-family: "DM Sans", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; padding: 0; height: 100%; }
+
+body {
+  background:
+    radial-gradient(ellipse 70% 50% at 50% -10%, rgba(99, 102, 241, 0.1), transparent),
+    var(--bg);
+  color: var(--text);
+  min-height: 100%;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  min-height: 100vh;
+  padding: 28px 16px 40px;
+  display: flex;
+  justify-content: center;
+}

@@ -1,27 +1,28 @@
 /**
- * Dynamically load the Hello World template from the filesystem using Vite glob.
- * This removes the need to hardcode strings and allows for easy updates.
- * We include all files except .git metadata.
+ * Dynamically load workspace templates from the filesystem using Vite glob.
  */
 const helloWorldFiles = import.meta.glob('../../templates/hello-world/**/*', { query: '?raw', import: 'default', eager: true });
-// The second glob explicitly opts in dotfiles like `.env.example`, which
-// the default `**/*` pattern skips.
-const fullstackWorkshopFiles = {
-  ...import.meta.glob('../../templates/fullstack-workshop/**/*', { query: '?raw', import: 'default', eager: true }),
-  ...import.meta.glob('../../templates/fullstack-workshop/**/.*', { query: '?raw', import: 'default', eager: true }),
+
+const allTemplateFiles = {
+  ...import.meta.glob('../../templates/*/**/*', { query: '?raw', import: 'default', eager: true }),
+  ...import.meta.glob('../../templates/*/**/.*', { query: '?raw', import: 'default', eager: true }),
 };
 
-/**
- * Helper to build a tree and contents from a flat template object or Vite glob.
- */
+/** Fullstack example project ids (bundled under src/templates/). */
+export const FULLSTACK_TEMPLATE_IDS = [
+  'fullstack-workshop',
+  'pay-escrow',
+  'tip-jar',
+  'donation-vault',
+  'invoice-split',
+  'savings-circle',
+];
+
 const buildFromTemplate = (rootName, templates, pathPrefix = '') => {
   const tree = [{ id: rootName, name: rootName, type: 'folder', children: [] }];
   const contents = {};
 
   Object.entries(templates).forEach(([fullKey, content]) => {
-    // 1. Extract the relative path within the template folder
-    // For Vite glob, the key will be something like "../../templates/hello-world/src/lib.rs"
-    // We want just "src/lib.rs"
     let relativePath = fullKey;
     if (pathPrefix) {
       const index = fullKey.indexOf(pathPrefix);
@@ -30,10 +31,7 @@ const buildFromTemplate = (rootName, templates, pathPrefix = '') => {
       }
     }
 
-    // 2. Ignore internal files (.git, etc.)
-    if (relativePath.includes('.git/') || relativePath.endsWith('.git')) {
-      return;
-    }
+    if (relativePath.includes('.git/') || relativePath.endsWith('.git')) return;
 
     const fullPath = `${rootName}/${relativePath}`;
     contents[fullPath] = content;
@@ -45,7 +43,6 @@ const buildFromTemplate = (rootName, templates, pathPrefix = '') => {
     parts.forEach((part, index) => {
       currentPath += `/${part}`;
       const isFile = index === parts.length - 1;
-
       let node = currentLevel.find((n) => n.name === part);
       if (!node) {
         node = {
@@ -63,26 +60,33 @@ const buildFromTemplate = (rootName, templates, pathPrefix = '') => {
   return { tree, contents };
 };
 
-export const createHelloWorldWorkspace = () => {
-  // Pass "../../templates/hello-world" as the prefix to extract clean relative paths
-  return buildFromTemplate('hello-world', helloWorldFiles, '../../templates/hello-world');
-};
-
-export const createFullstackWorkshopWorkspace = () => {
-  return buildFromTemplate(
-    'fullstack-workshop',
-    fullstackWorkshopFiles,
-    '../../templates/fullstack-workshop',
+const filesForTemplate = (templateId) => {
+  const needle = `/templates/${templateId}/`;
+  return Object.fromEntries(
+    Object.entries(allTemplateFiles).filter(([key]) => key.includes(needle)),
   );
 };
 
-export const createBlankWorkspace = () => {
-  return buildFromTemplate('blank-project', {
-    'README.md': '# Blank Project\n\nStart building your project here.\n',
-  });
+export const createHelloWorldWorkspace = () =>
+  buildFromTemplate('hello-world', helloWorldFiles, '../../templates/hello-world');
+
+export const createFullstackTemplateWorkspace = (templateId) => {
+  if (!FULLSTACK_TEMPLATE_IDS.includes(templateId)) {
+    throw new Error(`Unknown fullstack template: ${templateId}`);
+  }
+  return buildFromTemplate(
+    templateId,
+    filesForTemplate(templateId),
+    `../../templates/${templateId}`,
+  );
 };
 
-export const createDefaultWorkspace = () => {
-  return createHelloWorldWorkspace();
-};
-// End of Templates
+export const createFullstackWorkshopWorkspace = () =>
+  createFullstackTemplateWorkspace('fullstack-workshop');
+
+export const createBlankWorkspace = () =>
+  buildFromTemplate('blank-project', {
+    'README.md': '# Blank Project\n\nStart building your project here.\n',
+  });
+
+export const createDefaultWorkspace = () => createHelloWorldWorkspace();

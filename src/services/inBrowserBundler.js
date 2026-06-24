@@ -21,6 +21,7 @@
  */
 
 import { detectFrontendRoot, collectPreviewFiles } from "../features/fullstack/fullstackBundler";
+import { FULLSTACK_TEMPLATE_IDS } from "../features/workspace/workspaceTemplates";
 import {
   buildPreviewFreighterShimContents,
   PREVIEW_FLAG_SCRIPT,
@@ -28,15 +29,23 @@ import {
 import { PREVIEW_CONSOLE_SCRIPT } from "./previewConsoleBridge";
 
 /**
- * Latest fullstack-workshop frontend sources from disk. Open workspaces keep
+ * Latest bundled template frontend sources from disk. Open workspaces keep
  * stale copies in React state — overlay at bundle time so preview fixes
- * (wallet auto-detect, removed READ_SOURCE_ADDRESS, etc.) apply without
- * forcing users to re-create the project.
+ * (u32 args, wallet bridge, action logging) apply without re-creating projects.
  */
-const WORKSHOP_FRONTEND_SRC = import.meta.glob(
-  "../templates/fullstack-workshop/frontend/src/*.{ts,tsx}",
+const TEMPLATE_FRONTEND_SRC = import.meta.glob(
+  "../templates/*/frontend/src/*.{ts,tsx,css}",
   { query: "?raw", import: "default", eager: true },
 );
+
+const APP_TEMPLATE_MARKERS = [
+  { id: "fullstack-workshop", needle: "On-chain integer state" },
+  { id: "pay-escrow", needle: "Milestone payments" },
+  { id: "tip-jar", needle: "Support this creator" },
+  { id: "donation-vault", needle: "Transparent giving" },
+  { id: "invoice-split", needle: "Share group expenses" },
+  { id: "savings-circle", needle: "Save together" },
+];
 
 /** Strip legacy lines that crash Stellar SDK v13 at module load time. */
 const sanitizeLegacyWorkshopSources = (filesMap) => {
@@ -58,15 +67,50 @@ const sanitizeLegacyWorkshopSources = (filesMap) => {
   }
 };
 
-/** Replace workshop `src/*` only for the bundled workshop template project. */
-const overlayWorkshopFrontendSources = (filesMap) => {
+const detectTemplateId = (treeData, filesMap) => {
+  const rootName = treeData?.[0]?.name;
+  if (rootName && FULLSTACK_TEMPLATE_IDS.includes(rootName)) return rootName;
+
   const appSrc = filesMap.get("src/App.tsx") || filesMap.get("src/App.jsx") || "";
-  if (!filesMap.has("src/sorobanClient.ts")) return;
-  if (!appSrc.includes("Soroban Counter")) return;
-  for (const [key, content] of Object.entries(WORKSHOP_FRONTEND_SRC)) {
-    const rel = key.replace(/^.*\/frontend\//, "");
-    if (rel.startsWith("src/")) filesMap.set(rel, content);
+  for (const { id, needle } of APP_TEMPLATE_MARKERS) {
+    if (appSrc.includes(needle)) return id;
   }
+  // Split Bill uses JSX split across elements — match class or tagline too
+  if (appSrc.includes("Split") && appSrc.includes("Bill")) return "invoice-split";
+  return null;
+};
+
+/** Replace template `frontend/src/*` from disk so preview always uses latest fixes. */
+const overlayTemplateFrontendSources = (filesMap, treeData) => {
+  if (!filesMap.has("src/sorobanClient.ts")) return;
+  const templateId = detectTemplateId(treeData, filesMap);
+  if (!templateId) return;
+
+  const marker = `/templates/${templateId}/frontend/src/`;
+  for (const [key, content] of Object.entries(TEMPLATE_FRONTEND_SRC)) {
+    if (!key.includes(marker)) continue;
+    // glob keys end with …/frontend/src/File.ts — map to workspace src/File.ts
+    const rel = `src/${key.slice(key.indexOf(marker) + marker.length)}`;
+    filesMap.set(rel, content);
+  }
+};
+
+/** Patch stale in-memory sorobanClient that still maps args with bare nativeToScVal. */
+const patchLegacySorobanClient = (filesMap) => {
+  const path = "src/sorobanClient.ts";
+  const src = filesMap.get(path);
+  if (!src || typeof src !== "string") return;
+  if (src.includes('type: "u32"') || src.includes("argsToScVals")) return;
+  if (!src.includes("nativeToScVal")) return;
+
+  let next = src;
+  if (next.includes("args.map((a) => nativeToScVal(a))")) {
+    next = next.replace(
+      /args\.map\(\(a\) => nativeToScVal\(a\)\)/g,
+      `args.map((a) => (typeof a === "number" && Number.isInteger(a) && a >= 0 ? nativeToScVal(a, { type: "u32" }) : nativeToScVal(a)))`,
+    );
+  }
+  if (next !== src) filesMap.set(path, next);
 };
 
 // ── Import classification ────────────────────────────────────────────────
@@ -329,7 +373,8 @@ export async function bundleFrontendInBrowser(treeData, fileContents, options = 
     }
   }
 
-  overlayWorkshopFrontendSources(filesMap);
+  overlayTemplateFrontendSources(filesMap, treeData);
+  patchLegacySorobanClient(filesMap);
   sanitizeLegacyWorkshopSources(filesMap);
 
   if (!indexHtml) {
@@ -698,9 +743,47 @@ function stellarSdkCompatPlugin(filesMap) {
         const lines = [
           `import __pkg from ${JSON.stringify(url)};`,
           "const __sdk = __pkg.default ?? __pkg;",
-          ...STELLAR_SDK_EXPORTS.map(
+          "",
+          "// Coerce numeric contract args to ScVal U32 (nativeToScVal(100) → U64 traps u32 params).",
+          "function __coerceSorobanArg(arg) {",
+          "  if (arg != null && typeof arg === \"object\" && typeof arg.switch === \"function\") {",
+          "    if (arg.switch().name === \"scvU64\") {",
+          "      const n = Number(__sdk.scValToNative(arg));",
+          "      if (Number.isInteger(n) && n >= 0 && n <= 0xffffffff) {",
+          "        return __sdk.xdr.ScVal.scvU32(n >>> 0);",
+          "      }",
+          "    }",
+          "    return arg;",
+          "  }",
+          "  if (typeof arg === \"number\" && Number.isInteger(arg) && arg >= 0 && arg <= 0xffffffff) {",
+          "    return __sdk.xdr.ScVal.scvU32(arg >>> 0);",
+          "  }",
+          "  if (typeof arg === \"bigint\" && arg >= 0n && arg <= 0xffffffffn) {",
+          "    return __sdk.xdr.ScVal.scvU32(Number(arg));",
+          "  }",
+          "  return arg;",
+          "}",
+          "",
+          "const __NativeToScVal = __sdk.nativeToScVal;",
+          "function __nativeToScVal(val, opts) {",
+          "  if (opts && opts.type === \"u32\") {",
+          "    return __sdk.xdr.ScVal.scvU32(Number(val) >>> 0);",
+          "  }",
+          "  return __NativeToScVal(val, opts);",
+          "}",
+          "",
+          "const __BaseContract = __sdk.Contract;",
+          "class __PreviewContract extends __BaseContract {",
+          "  call(fn, ...args) {",
+          "    return super.call(fn, ...args.map(__coerceSorobanArg));",
+          "  }",
+          "}",
+          "",
+          ...STELLAR_SDK_EXPORTS.filter((name) => name !== "Contract" && name !== "nativeToScVal").map(
             (name) => `export const ${name} = __sdk[${JSON.stringify(name)}];`,
           ),
+          "export const nativeToScVal = __nativeToScVal;",
+          "export const Contract = __PreviewContract;",
           "export const SorobanRpc = __sdk.SorobanRpc ?? __sdk.rpc;",
           "export default __sdk;",
         ];
