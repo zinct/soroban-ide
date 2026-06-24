@@ -63,12 +63,12 @@ export const connectFreighter = async () => {
   }
 };
 
-export const signFreighterTransaction = async (xdr, address) => {
+export const signFreighterTransaction = async (xdr, address, networkPassphrase = TESTNET_PASSPHRASE) => {
   // Pass `address` so Freighter signs with the exact account the IDE has
   // recorded — avoids signing with a different account when the user has
   // multiple in the extension.
   const result = await signTransaction(xdr, {
-    networkPassphrase: TESTNET_PASSPHRASE,
+    networkPassphrase,
     ...(address ? { address } : {}),
   });
   // Freighter returns { signedTxXdr, error } or throws

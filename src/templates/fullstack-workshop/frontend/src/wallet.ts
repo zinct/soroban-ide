@@ -8,6 +8,9 @@
  *      inside a blob iframe (Freighter can't see blob: origins directly).
  *   3. Freighter extension — works when the app runs on a normal https/http
  *      origin (local Vite, Vercel deploy).
+ *
+ * In the IDE blob preview, `@stellar/freighter-api` is shimmed to postMessage
+ * the parent window — Freighter popups open on the IDE origin for signing.
  */
 import { useCallback, useEffect, useState } from "react";
 import { getAddress, isConnected, requestAccess } from "@stellar/freighter-api";

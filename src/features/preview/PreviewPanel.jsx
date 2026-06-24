@@ -23,11 +23,18 @@ import { detectFrontendRoot } from "../fullstack/fullstackBundler";
 import { downloadFrontendZip } from "./downloadFrontend";
 import { watchLocalServer } from "../../services/localServerProbe";
 import { bundleFrontendInBrowser } from "../../services/inBrowserBundler";
+import {
+  handlePreviewWalletRequest,
+  PREVIEW_WALLET_REQUEST,
+} from "../../services/previewWalletBridge";
+import { dispatchPreviewLog, logPreviewActivity, PREVIEW_LOG_MESSAGE } from "../../services/previewConsoleBridge";
+import { signFreighterTransaction } from "../../services/freighter";
 import { useContract } from "../../context/ContractContext";
 import { useDeploy } from "../../context/DeployContext";
-import { getPreviewContract } from "../deploy/deploymentHistory";
+import { resolvePreviewContract } from "../deploy/deploymentHistory";
 import {
   fingerprintFrontend,
+  parsePreviewEnv,
   BUILD_STAGE_ORDER,
   BUILD_STAGE_LABELS,
   BUILD_STAGE_PROGRESS,
@@ -53,13 +60,18 @@ const normalizeUrl = (raw) => {
 };
 
 const PreviewPanel = ({ treeData, fileContents, isActive = true }) => {
-  const { walletAddress, connectWallet } = useContract();
+  const { walletAddress, walletNetworkPassphrase, connectWallet } = useContract();
   const { deploymentHistory } = useDeploy();
   const detection = useMemo(() => detectFrontendRoot(treeData), [treeData]);
 
+  const previewEnv = useMemo(
+    () => parsePreviewEnv(detection, fileContents),
+    [detection, fileContents],
+  );
+
   const previewContract = useMemo(
-    () => getPreviewContract(deploymentHistory),
-    [deploymentHistory],
+    () => resolvePreviewContract(deploymentHistory, previewEnv),
+    [deploymentHistory, previewEnv],
   );
 
   // "in-ide" — bundle in the browser (default) | "external" — localhost dev server
@@ -137,6 +149,7 @@ const PreviewPanel = ({ treeData, fileContents, isActive = true }) => {
   const handleIframeLoad = useCallback(() => {
     setLoadedOnce(true);
     postWalletToIframe();
+    logPreviewActivity("[preview] UI loaded — interact with the app to see activity here");
   }, [postWalletToIframe]);
 
   // Push wallet updates into the preview when the Deploy panel connects
@@ -145,9 +158,37 @@ const PreviewPanel = ({ treeData, fileContents, isActive = true }) => {
     postWalletToIframe();
   }, [walletAddress, buildState.phase, reloadCounter, postWalletToIframe]);
 
+  // Route Freighter popups and preview console logs through the parent IDE.
+  useEffect(() => {
+    const onMessage = (event) => {
+      const frameWin = iframeRef.current?.contentWindow;
+      if (!frameWin || event.source !== frameWin) return;
+      const data = event.data;
+      if (data?.source !== "soroban-preview") return;
+
+      if (data.type === PREVIEW_WALLET_REQUEST) {
+        handlePreviewWalletRequest(data, {
+          eventSource: event.source,
+          walletAddress,
+          walletNetworkPassphrase,
+          connectWallet,
+          signTransaction: signFreighterTransaction,
+        });
+        return;
+      }
+
+      if (data.type === PREVIEW_LOG_MESSAGE) {
+        dispatchPreviewLog(data);
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [walletAddress, walletNetworkPassphrase, connectWallet]);
+
   const runBuild = useCallback(async () => {
     if (buildInFlightRef.current) return;
     buildInFlightRef.current = true;
+    logPreviewActivity("--- Preview rebuild started ---");
     setBuildState({ phase: "building", stage: "collect", message: "Reading workspace files..." });
     setLoadedOnce(false);
     try {
@@ -156,7 +197,7 @@ const PreviewPanel = ({ treeData, fileContents, isActive = true }) => {
           setBuildState({ phase: "building", stage: p.stage, message: p.message });
         },
         walletAddress: walletAddress || undefined,
-        contractId: previewContract?.contractId ?? "",
+        contractId: previewContract?.contractId || undefined,
         network: previewContract?.network,
       });
       setPreviewBlobs(result.blobUrl, result.auxBlobUrls);
@@ -169,11 +210,16 @@ const PreviewPanel = ({ treeData, fileContents, isActive = true }) => {
         warnings: result.warnings,
         entry: result.entry,
       });
+      logPreviewActivity(
+        `Preview built in ${Math.round(result.durationMs)}ms (${(result.bytes / 1024).toFixed(0)} KB) — entry ${result.entry || "?"}`,
+      );
       setReloadCounter((n) => n + 1);
     } catch (err) {
+      const message = err && err.message ? err.message : String(err);
+      logPreviewActivity(`Build failed: ${message}`, "error");
       setBuildState({
         phase: "error",
-        message: err && err.message ? err.message : String(err),
+        message,
         details: err && err.details ? err.details : [],
       });
     } finally {
@@ -305,9 +351,11 @@ const PreviewPanel = ({ treeData, fileContents, isActive = true }) => {
 
   const showLocalEmpty = detection.kind === "empty";
   const localHasFrontend = detection.kind !== "empty";
-  const hasContract = Boolean(previewContract?.contractId);
+  const hasContract = Boolean(
+    previewContract?.contractId || previewEnv.VITE_CONTRACT_ID?.startsWith("C"),
+  );
   const hasWallet = Boolean(walletAddress);
-  const readyToRun = localHasFrontend && hasContract;
+  const readyToRun = localHasFrontend;
 
   const goDeploy = useCallback(() => openPanel("deploy"), [openPanel]);
 
@@ -516,7 +564,7 @@ const ReadinessStrip = ({
     <ReadinessChip
       ok={hasContract}
       icon={<FileCode size={11} />}
-      label={hasContract ? `Contract ${shortContractId(contractId)}` : "No contract"}
+      label={hasContract ? `Contract ${shortContractId(contractId)}` : "No contract ID"}
       actionLabel={hasContract ? null : "Deploy"}
       onAction={hasContract ? null : onDeploy}
     />
@@ -573,8 +621,10 @@ const InIdeBody = ({
         </div>
         <div className="pv-build-sub">
           {readyToRun
-            ? <>Your frontend and contract are linked. One click compiles and frames your app here.</>
-            : <>Deploy your contract in the <strong>Deploy</strong> panel first — the contract ID is picked up automatically.</>}
+            ? hasContract
+              ? <>Your frontend and contract are linked. One click compiles and frames your app here.</>
+              : <>Your frontend is ready. Connect a contract via Deploy or <code>.env</code> to test on-chain calls.</>
+            : <>Add a <code>frontend/</code> folder with an <code>index.html</code> entry point.</>}
         </div>
 
         <div className="pv-launch-steps">
@@ -585,14 +635,14 @@ const InIdeBody = ({
           />
           <LaunchStep
             done={hasContract}
-            title="Contract deployed"
-            sub={hasContract ? "ID wired into the preview build" : "Build & deploy in the Deploy panel"}
+            title="Contract linked"
+            sub={hasContract ? "ID wired from .env or latest deploy" : "Deploy any contract or add VITE_CONTRACT_ID to .env"}
             action={hasContract ? null : { label: "Open Deploy", onClick: onDeploy }}
           />
           <LaunchStep
             done={hasWallet}
             title="Wallet connected"
-            sub={hasWallet ? "Freighter linked for read/write calls" : "Optional — connect to test transactions"}
+            sub={hasWallet ? "Freighter linked — write actions open the wallet popup" : "Connect to test contract transactions in the preview"}
             action={hasWallet ? null : { label: "Connect", onClick: onConnectWallet }}
           />
         </div>
@@ -601,7 +651,7 @@ const InIdeBody = ({
           className={`pv-cta-btn pv-cta-primary pv-build-cta ${readyToRun ? "pv-build-cta-ready" : ""}`}
           onClick={onRun}
         >
-          <Play size={12} /> {readyToRun ? "Run in IDE" : "Try preview anyway"}
+          <Play size={12} /> Run in IDE
         </button>
         <div className="pv-build-fine">
           Turn on <strong>Live</strong> above — edits to <code>frontend/</code> auto-rebuild in ~1s.

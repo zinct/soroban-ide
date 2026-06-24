@@ -165,6 +165,7 @@ const App = () => {
             {!address && !detecting && (
               <p className="hint">
                 Connect Freighter in the Deploy panel or click <strong>Connect Freighter</strong> above.
+                Write actions (increment, etc.) open the Freighter popup to sign.
               </p>
             )}
 

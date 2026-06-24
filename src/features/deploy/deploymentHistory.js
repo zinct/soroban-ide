@@ -187,6 +187,25 @@ const deploymentHasCounterApi = (deployment, requiredMethods = ["get", "incremen
 };
 
 /**
+ * Resolve which contract the in-IDE preview should use.
+ * Priority: valid VITE_CONTRACT_ID in frontend/.env → latest deploy of any contract.
+ */
+export function resolvePreviewContract(history, envFromFiles = {}) {
+  const envId = (envFromFiles.VITE_CONTRACT_ID || "").toString().trim();
+  if (envId.startsWith("C")) {
+    const envNet = (envFromFiles.VITE_NETWORK || "").toString().trim();
+    return {
+      contractId: envId,
+      network: envNet ? toViteNetwork(envNet) : undefined,
+      source: "env",
+    };
+  }
+  const latest = getLatestDeployedContract(history);
+  if (latest) return { ...latest, source: "deploy" };
+  return null;
+}
+
+/**
  * Pick the best deployed contract for the fullstack-workshop counter UI.
  * Only returns contracts on a counter path or with a verified get/increment API.
  */

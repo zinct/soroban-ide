@@ -1,9 +1,43 @@
-import { collectFrontendFiles } from "../fullstack/fullstackBundler";
+import { collectPreviewFiles } from "../fullstack/fullstackBundler";
+
+const parseEnvLine = (text) => {
+  const env = {};
+  if (!text) return env;
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eq = line.indexOf("=");
+    if (eq === -1) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"'))
+      || (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (key) env[key] = value;
+  }
+  return env;
+};
+
+/** Read merged VITE_* values from frontend .env files in the workspace. */
+export const parsePreviewEnv = (detection, fileContents) => {
+  if (!detection?.folder || detection.kind === "empty") return {};
+  const files = collectPreviewFiles(detection.folder, fileContents || {});
+  let env = {};
+  for (const { path, content } of files) {
+    if (/^\.env(\.|$)/.test(path)) {
+      env = { ...env, ...parseEnvLine(content) };
+    }
+  }
+  return env;
+};
 
 /** Fingerprint frontend workspace files to detect edits for live rebuild. */
 export const fingerprintFrontend = (detection, fileContents) => {
   if (!detection?.folder || detection.kind === "empty") return "";
-  const files = collectFrontendFiles(detection.folder, fileContents || {});
+  const files = collectPreviewFiles(detection.folder, fileContents || {});
   if (files.length === 0) return "";
   let hash = 0;
   const blob = files

@@ -40,6 +40,17 @@ export const contractId = CONTRACT_ID;
 
 export const server = new rpc.Server(config.rpcUrl, { allowHttp: false });
 
+const formatRpcError = (err: unknown, context: string): Error => {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/bad union switch/i.test(message)) {
+    return new Error(
+      `${context}: Stellar SDK is too old to read testnet responses (Bad union switch). `
+      + "Update @stellar/stellar-sdk to ^15.1.0 or newer in frontend/package.json, then Rebuild preview.",
+    );
+  }
+  return err instanceof Error ? err : new Error(message);
+};
+
 const requireContract = () => {
   if (!CONTRACT_ID) {
     throw new Error(
@@ -59,31 +70,34 @@ const requireContract = () => {
  * that don't need to sign or submit anything.
  */
 export const simulate = async <T = unknown>(method: string, source: string): Promise<T> => {
-  const contract = requireContract();
-  const account = await server.getAccount(source);
-  const tx = new TransactionBuilder(account, {
-    fee: BASE_FEE,
-    networkPassphrase: config.networkPassphrase,
-  })
-    .addOperation(contract.call(method))
-    .setTimeout(30)
-    .build();
+  try {
+    const contract = requireContract();
+    const account = await server.getAccount(source);
+    const tx = new TransactionBuilder(account, {
+      fee: BASE_FEE,
+      networkPassphrase: config.networkPassphrase,
+    })
+      .addOperation(contract.call(method))
+      .setTimeout(30)
+      .build();
 
-  const sim = await server.simulateTransaction(tx);
-  if (rpc.Api.isSimulationError(sim)) {
-    const err = sim.error || "Simulation failed";
-    if (/non-existent contract function/i.test(err)) {
-      throw new Error(
-        `This contract does not have a "${method}" function. `
-        + "Deploy the counter from contracts/counter in the Deploy panel (build + deploy), "
-        + "then click Rebuild in Preview.",
-      );
+    const sim = await server.simulateTransaction(tx);
+    if (rpc.Api.isSimulationError(sim)) {
+      const err = sim.error || "Simulation failed";
+      if (/non-existent contract function/i.test(err)) {
+        throw new Error(
+          `This contract does not have a "${method}" function. `
+          + "Deploy your contract in the Deploy panel, set VITE_CONTRACT_ID in .env, then Rebuild preview.",
+        );
+      }
+      throw new Error(`Simulation failed: ${err}`);
     }
-    throw new Error(`Simulation failed: ${err}`);
+    const retval = (sim as rpc.Api.SimulateTransactionSuccessResponse).result?.retval;
+    if (!retval) throw new Error("Simulation returned no value");
+    return scValToNative(retval) as T;
+  } catch (err) {
+    throw formatRpcError(err, "Read call failed");
   }
-  const retval = (sim as rpc.Api.SimulateTransactionSuccessResponse).result?.retval;
-  if (!retval) throw new Error("Simulation returned no value");
-  return scValToNative(retval) as T;
 };
 
 /**
@@ -100,46 +114,47 @@ export const invokeWrite = async <T = unknown>(
   source: string,
   signXDR: (xdr: string, opts: { networkPassphrase: string; address: string }) => Promise<string | { signedTxXdr?: string }>,
 ): Promise<T> => {
-  const contract = requireContract();
-  const account = await server.getAccount(source);
+  try {
+    const contract = requireContract();
+    const account = await server.getAccount(source);
 
-  const tx = new TransactionBuilder(account, {
-    fee: BASE_FEE,
-    networkPassphrase: config.networkPassphrase,
-  })
-    .addOperation(contract.call(method))
-    .setTimeout(60)
-    .build();
+    const tx = new TransactionBuilder(account, {
+      fee: BASE_FEE,
+      networkPassphrase: config.networkPassphrase,
+    })
+      .addOperation(contract.call(method))
+      .setTimeout(60)
+      .build();
 
-  // Soroban requires the transaction to be prepared with footprint, auth,
-  // and fee estimates from the simulation result before submission.
-  const prepared = await server.prepareTransaction(tx);
+    const prepared = await server.prepareTransaction(tx);
 
-  const signed = await signXDR(prepared.toXDR(), {
-    networkPassphrase: config.networkPassphrase,
-    address: source,
-  });
-  const signedXdr = typeof signed === "string" ? signed : signed.signedTxXdr ?? "";
-  if (!signedXdr) throw new Error("Wallet returned an empty signed XDR");
+    const signed = await signXDR(prepared.toXDR(), {
+      networkPassphrase: config.networkPassphrase,
+      address: source,
+    });
+    const signedXdr = typeof signed === "string" ? signed : signed.signedTxXdr ?? "";
+    if (!signedXdr) throw new Error("Wallet returned an empty signed XDR");
 
-  const finalTx = TransactionBuilder.fromXDR(signedXdr, config.networkPassphrase);
-  const sent = await server.sendTransaction(finalTx);
-  if (sent.status === "ERROR") {
-    throw new Error(`Transaction rejected: ${sent.errorResult?.toXDR("base64") ?? "unknown"}`);
+    const finalTx = TransactionBuilder.fromXDR(signedXdr, config.networkPassphrase);
+    const sent = await server.sendTransaction(finalTx);
+    if (sent.status === "ERROR") {
+      throw new Error(`Transaction rejected: ${sent.errorResult?.toXDR("base64") ?? "unknown"}`);
+    }
+
+    const deadline = Date.now() + 30_000;
+    let getResp: rpc.Api.GetTransactionResponse | null = null;
+    while (Date.now() < deadline) {
+      getResp = await server.getTransaction(sent.hash);
+      if (getResp.status !== "NOT_FOUND" && getResp.status !== "PENDING") break;
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+    if (!getResp || getResp.status !== "SUCCESS") {
+      throw new Error(`Transaction did not succeed: ${getResp?.status ?? "timeout"}`);
+    }
+
+    const retval: xdr.ScVal | undefined = getResp.returnValue;
+    return (retval ? scValToNative(retval) : undefined) as T;
+  } catch (err) {
+    throw formatRpcError(err, "Write call failed");
   }
-
-  // Poll until terminal state, max ~30s.
-  const deadline = Date.now() + 30_000;
-  let getResp: rpc.Api.GetTransactionResponse | null = null;
-  while (Date.now() < deadline) {
-    getResp = await server.getTransaction(sent.hash);
-    if (getResp.status !== "NOT_FOUND" && getResp.status !== "PENDING") break;
-    await new Promise((r) => setTimeout(r, 1500));
-  }
-  if (!getResp || getResp.status !== "SUCCESS") {
-    throw new Error(`Transaction did not succeed: ${getResp?.status ?? "timeout"}`);
-  }
-
-  const retval: xdr.ScVal | undefined = getResp.returnValue;
-  return (retval ? scValToNative(retval) : undefined) as T;
 };
