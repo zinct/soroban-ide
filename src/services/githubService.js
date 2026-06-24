@@ -30,14 +30,25 @@ export const parseGithubUrl = (url) => {
     .replace(/\/+$/, "")
     .replace(/\.git$/, "");
 
-  const httpsMatch = cleanUrl.match(/^https?:\/\/(?:www\.)?github\.com\/([^\/]+)\/([^\/]+)/);
-  if (httpsMatch) return { owner: httpsMatch[1], repo: httpsMatch[2] };
+  // Extract optional branch from /tree/<branch> path segment.
+  // GitHub branch URLs: github.com/owner/repo/tree/branch-name
+  // Branch names can contain slashes, so we capture everything after /tree/.
+  const httpsMatch = cleanUrl.match(
+    /^https?:\/\/(?:www\.)?github\.com\/([^\/]+)\/([^\/]+?)(?:\/tree\/(.+))?$/
+  );
+  if (httpsMatch) {
+    return { owner: httpsMatch[1], repo: httpsMatch[2], branch: httpsMatch[3] || undefined };
+  }
 
   const sshMatch = cleanUrl.match(/^git@github\.com:([^\/]+)\/([^\/]+)/);
   if (sshMatch) return { owner: sshMatch[1], repo: sshMatch[2] };
 
-  const domainMatch = cleanUrl.match(/^github\.com\/([^\/]+)\/([^\/]+)/);
-  if (domainMatch) return { owner: domainMatch[1], repo: domainMatch[2] };
+  const domainMatch = cleanUrl.match(
+    /^github\.com\/([^\/]+)\/([^\/]+?)(?:\/tree\/(.+))?$/
+  );
+  if (domainMatch) {
+    return { owner: domainMatch[1], repo: domainMatch[2], branch: domainMatch[3] || undefined };
+  }
 
   const shortMatch = cleanUrl.match(/^([^\/]+)\/([^\/]+)$/);
   if (shortMatch) return { owner: shortMatch[1], repo: shortMatch[2] };
@@ -238,10 +249,11 @@ export const cloneRepository = async (githubUrl) => {
     throw new Error("Invalid GitHub URL. Please use format: https://github.com/owner/repo");
   }
 
-  const { owner, repo } = parsed;
+  const { owner, repo, branch: urlBranch } = parsed;
 
   const repoInfo = await fetchRepoInfo(owner, repo);
-  const defaultBranch = repoInfo.default_branch || "main";
+  // Use branch from URL (e.g. /tree/feature-x) if present, else repo default.
+  const defaultBranch = urlBranch || repoInfo.default_branch || "main";
 
   const tree = await fetchFullTree(owner, repo, defaultBranch);
   if (tree.truncated) {

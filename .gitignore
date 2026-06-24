@@ -113,3 +113,4 @@ target/
 *.swo
 *~
 Thumbs.db
+.agents/

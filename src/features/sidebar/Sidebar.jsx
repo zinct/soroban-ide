@@ -759,7 +759,7 @@ const Sidebar = memo(({ tree, expandedFolders, onToggleFolder, onFileSelect, onN
                 <div className="sidebar-title">Deploy</div>
               </div>
               <div className="sidebar-body" style={{ overflowY: "auto" }}>
-                <DeployPanel treeData={treeData || tree} fileContents={fileContents || {}} />
+                <DeployPanel treeData={treeData || tree} fileContents={fileContents || {}} setFileContents={setFileContents} />
               </div>
             </>
           ) : activePanel === "preview" ? (

@@ -23,6 +23,10 @@ import {
   explorerUrl,
   shortId,
 } from "./deploymentHistory";
+import {
+  findReadmePath,
+  appendDeploymentToReadme,
+} from "./readmeDeployWriter";
 
 const CONTRACT_STORAGE_KEY = "soroban:selectedContract";
 const DEPLOY_PRESETS_KEY = "soroban:deploy_presets";
@@ -113,7 +117,7 @@ const Section = ({ icon, title, children, defaultOpen = false, badge }) => {
   );
 };
 
-const DeployPanel = ({ treeData, fileContents }) => {
+const DeployPanel = ({ treeData, fileContents, setFileContents }) => {
   const {
     compileStatus, setCompileStatus,
     deployStatus, setDeployStatus,
@@ -569,6 +573,28 @@ const DeployPanel = ({ treeData, fileContents }) => {
       if (result?.contractId) {
         await recordDeploy(result.contractId);
         appendTerminal("output", `📋 Contract ID: ${result.contractId}`);
+
+        // Auto-append deployment info to README.md
+        if (setFileContents) {
+          try {
+            const readmeId = findReadmePath(treeData);
+            if (readmeId) {
+              setFileContents((prev) => {
+                const existing = prev[readmeId] || "";
+                const updated = appendDeploymentToReadme(existing, {
+                  contractId: result.contractId,
+                  txHash: result.hash || "",
+                  network: deployNetwork,
+                  wallet: walletProviderId || "wallet",
+                  walletAddress,
+                });
+                return { ...prev, [readmeId]: updated };
+              });
+              appendTerminal("output", "📝 Deployment info added to README.md");
+            }
+          } catch (_) { /* non-fatal — README update is best-effort */ }
+        }
+
         setDeployStatus("success");
       } else {
         throw new Error("Deploy transaction submitted, but no contract ID was returned.");
@@ -588,7 +614,7 @@ const DeployPanel = ({ treeData, fileContents }) => {
     } finally {
       window.dispatchEvent(new Event("soroban:terminalIdle"));
     }
-  }, [treeData, fileContents, alias, walletAddress, walletProviderId, walletNetworkPassphrase, walletClient, selectedContract, addDeployment, deployNetwork, saltMode, manualSalt]);
+  }, [treeData, fileContents, alias, walletAddress, walletProviderId, walletNetworkPassphrase, walletClient, selectedContract, addDeployment, deployNetwork, saltMode, manualSalt, setFileContents]);
 
   // ─── Invoke → stream to Terminal (scoped per contract) ───────────────────
 

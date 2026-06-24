@@ -744,9 +744,18 @@ const GitHubPanel = memo(({ treeData, fileContents, onConfirm, onOpenGithubRepos
                           {!branchesLoading &&
                             !branchesError &&
                             branches.slice(0, 30).map((b) => (
-                              <span key={b.name} className={`github-branch-pill ${b.name === branch ? "current" : ""}`}>
+                              <button
+                                key={b.name}
+                                type="button"
+                                className={`github-branch-pill ${b.name === branch ? "current" : ""}`}
+                                title={`Open branch "${b.name}" in workspace`}
+                                onClick={() => {
+                                  const branchUrl = `${repoUrl}/tree/${b.name}`;
+                                  handleOpenInWorkspace({ ...repo, html_url: branchUrl });
+                                }}
+                              >
                                 {b.name}
-                              </span>
+                              </button>
                             ))}
                           {!branchesLoading && !branchesError && branches.length > 30 && <span className="github-branches-status">+{branches.length - 30} more branches</span>}
                         </div>

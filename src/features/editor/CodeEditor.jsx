@@ -142,6 +142,28 @@ const CodeEditor = ({ fileId, filePath, content, language, theme, onChange, onCu
     isUpdatingRef.current = false;
   }, [fileId, filePath, content, language]);
 
+  // Handle programmatically inserting text at cursor (e.g. inserting images)
+  useEffect(() => {
+    const handleInsertText = (e) => {
+      const { text, fileId: targetFileId } = e.detail;
+      if (targetFileId !== fileId) return;
+      if (editorRef.current) {
+        const selection = editorRef.current.getSelection();
+        const range = new monaco.Range(
+          selection.startLineNumber,
+          selection.startColumn,
+          selection.endLineNumber,
+          selection.endColumn
+        );
+        const id = { major: 1, minor: 1 };
+        const textOp = { identifier: id, range: range, text: text, forceMoveMarkers: true };
+        editorRef.current.executeEdits("insert-text", [textOp]);
+      }
+    };
+    window.addEventListener("soroban:insertText", handleInsertText);
+    return () => window.removeEventListener("soroban:insertText", handleInsertText);
+  }, [fileId]);
+
   // Handle Theme changes
   useEffect(() => {
     if (!theme) return;

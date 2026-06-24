@@ -24,10 +24,11 @@ import { cloneRepository } from "../services/githubService";
 import { FileIconImg, FolderIconImg } from "../components/icons/FileIcon";
 import { ChevronDown, ChevronRight } from "../components/icons/ChevronIcons";
 import { sortNodes, uniqueId, ensureTreeIds } from "../features/workspace/workspaceUtils";
-import { Plus, FolderOpen, FileText, X, Menu } from "lucide-react";
+import { Plus, FolderOpen, FileText, X, Menu, Image as ImageIcon, Eye, Split } from "lucide-react";
 import Sidebar from "../features/sidebar/Sidebar";
 import Tabs from "../features/tabs/Tabs";
 import Editor from "../features/editor/Editor";
+import MarkdownPreview from "../features/editor/MarkdownPreview";
 import Terminal from "../features/terminal/Terminal";
 import { getLanguageFromName, getLanguageDisplayName } from "../features/editor/editorUtils";
 import { cloneNodeWithNewIds, addNodeToTree, moveNodeInTree } from "../features/workspace/workspaceUtils";
@@ -67,6 +68,104 @@ const Layout = () => {
   });
   const createMenuRef = useRef(null);
   const setFileContentsRef = useRef(workspace.setFileContents);
+  const imageInputRef = useRef(null);
+  const [markdownMode, setMarkdownMode] = useState("edit"); // "edit" | "preview" | "split"
+
+  const handleInsertImageClick = useCallback(() => {
+    imageInputRef.current?.click();
+  }, []);
+
+  const handleImageUpload = useCallback(async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const activeFile = tabManager.activeFileId ? workspace.flattenedNodes.get(tabManager.activeFileId) : null;
+      if (!activeFile) return;
+
+      // Read file as binary -> Base64
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const content = btoa(binary);
+
+      // Resolve parent folder ID
+      const rootId = workspace.treeData[0]?.id || "root";
+      let parentFolderId = rootId;
+      if (activeFile.path) {
+        const parts = activeFile.path.split("/");
+        if (parts.length > 1) {
+          parentFolderId = parts.slice(0, -1).join("/");
+        }
+      }
+
+      // Check if assets folder exists under parentFolder
+      const assetsFolderId = parentFolderId === "root" ? "assets" : `${parentFolderId}/assets`;
+      const hasAssetsFolder = workspace.flattenedNodes.has(assetsFolderId) && workspace.flattenedNodes.get(assetsFolderId).type === "folder";
+
+      // Resolve unique file name inside assets folder
+      const originalName = file.name;
+      const lastDotIndex = originalName.lastIndexOf(".");
+      const ext = lastDotIndex > 0 ? originalName.slice(lastDotIndex + 1) : "png";
+      const baseName = lastDotIndex > 0 ? originalName.slice(0, lastDotIndex) : originalName;
+
+      const findFolderChildrenNames = (nodes, id) => {
+        for (const n of nodes) {
+          if (n.id === id) {
+            return n.children?.map((c) => c.name) || [];
+          }
+          if (n.children?.length) {
+            const names = findFolderChildrenNames(n.children, id);
+            if (names.length) return names;
+          }
+        }
+        return [];
+      };
+
+      const siblingNames = hasAssetsFolder ? findFolderChildrenNames(workspace.treeData, assetsFolderId) : [];
+      const siblingNamesSet = new Set(siblingNames);
+
+      let finalName = originalName;
+      let counter = 1;
+      while (siblingNamesSet.has(finalName)) {
+        finalName = `${baseName}_${counter}.${ext}`;
+        counter++;
+      }
+
+      // Create new ID and node
+      const newId = `${assetsFolderId}/${finalName}`;
+      const newNode = { id: newId, name: finalName, type: "file", children: [] };
+
+      // Update workspace tree and file contents
+      if (hasAssetsFolder) {
+        workspace.setTreeData((prev) => addNodeToTree(prev, assetsFolderId, newNode));
+      } else {
+        const assetsNode = { id: assetsFolderId, name: "assets", type: "folder", children: [newNode] };
+        workspace.setTreeData((prev) => addNodeToTree(prev, parentFolderId, assetsNode));
+      }
+      workspace.setFileContents((prev) => ({ ...prev, [newId]: content }));
+
+      // Trigger cursor insertion via CustomEvent with ./assets/ prefix
+      window.dispatchEvent(
+        new CustomEvent("soroban:insertText", {
+          detail: {
+            text: `![${finalName}](./assets/${encodeURIComponent(finalName)})`,
+            fileId: tabManager.activeFileId,
+          },
+        })
+      );
+
+      // Reset file input value
+      if (imageInputRef.current) {
+        imageInputRef.current.value = "";
+      }
+    } catch (err) {
+      console.error("Failed to insert photo:", err);
+    }
+  }, [tabManager.activeFileId, workspace]);
   const previewTabIdRef = useRef(tabManager.previewTabId);
   const activeFileIdRef = useRef(tabManager.activeFileId);
 
@@ -690,7 +789,85 @@ const Layout = () => {
               </div>
 
               <div className="editor-area">
-                <Editor fileId={tabManager.activeFileId} filePath={activeFile?.path} content={activeContent} language={language} theme={theme} onChange={handleEditorChange} onCursorChange={handleCursorChange} />
+                {language === "markdown" && markdownMode === "preview" ? (
+                  <MarkdownPreview
+                    content={activeContent}
+                    filePath={activeFile?.path}
+                    fileContents={workspace.fileContents}
+                    theme={theme}
+                  />
+                ) : language === "markdown" && markdownMode === "split" ? (
+                  <div className="markdown-split-container">
+                    <div className="markdown-split-pane">
+                      <Editor
+                        fileId={tabManager.activeFileId}
+                        filePath={activeFile?.path}
+                        content={activeContent}
+                        language={language}
+                        theme={theme}
+                        onChange={handleEditorChange}
+                        onCursorChange={handleCursorChange}
+                      />
+                    </div>
+                    <div className="markdown-split-pane">
+                      <MarkdownPreview
+                        content={activeContent}
+                        filePath={activeFile?.path}
+                        fileContents={workspace.fileContents}
+                        theme={theme}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <Editor
+                    fileId={tabManager.activeFileId}
+                    filePath={activeFile?.path}
+                    content={activeContent}
+                    language={language}
+                    theme={theme}
+                    onChange={handleEditorChange}
+                    onCursorChange={handleCursorChange}
+                  />
+                )}
+                {language === "markdown" && (
+                  <div className="editor-floating-toolbar">
+                    <button
+                      className={`editor-toolbar-btn ${markdownMode === "edit" ? "active" : ""}`}
+                      onClick={() => setMarkdownMode("edit")}
+                      title="Edit Mode"
+                    >
+                      <FileText size={14} />
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      className={`editor-toolbar-btn ${markdownMode === "split" ? "active" : ""}`}
+                      onClick={() => setMarkdownMode("split")}
+                      title="Split View"
+                    >
+                      <Split size={14} />
+                      <span>Split</span>
+                    </button>
+                    <button
+                      className={`editor-toolbar-btn ${markdownMode === "preview" ? "active" : ""}`}
+                      onClick={() => setMarkdownMode("preview")}
+                      title="Preview Mode"
+                    >
+                      <Eye size={14} />
+                      <span>Preview</span>
+                    </button>
+                    <button className="editor-toolbar-btn" onClick={handleInsertImageClick} title="Insert Photo">
+                      <ImageIcon size={14} />
+                      <span>Insert Photo</span>
+                    </button>
+                    <input
+                      type="file"
+                      ref={imageInputRef}
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={handleImageUpload}
+                    />
+                  </div>
+                )}
               </div>
 
               <Terminal activeFileName={activeFile?.path} treeData={workspace.treeData} fileContents={workspace.fileContents} onFileTreeUpdate={workspace.setTreeData} />
