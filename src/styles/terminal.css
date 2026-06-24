@@ -61,38 +61,110 @@
 
 .terminal-header {
   display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 0; /* Allow tabs to touch edges */
+  align-items: stretch;
+  justify-content: space-between;
+  padding: 0;
   height: var(--header-height);
   border-bottom: 1px solid var(--border-color);
   pointer-events: auto;
-  
-  /* Glassmorphism */
   background: rgba(var(--main-bg-rgb), 0.45);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   z-index: 10;
 }
 
+.terminal-tabs {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.terminal-tab {
+  display: flex;
+  align-items: center;
+  border-right: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.terminal-tab.is-active {
+  background: rgba(var(--accent-rgb, 99, 102, 241), 0.12);
+}
+
+.terminal-tab-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 14px;
+  height: 100%;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.terminal-tab.is-active .terminal-tab-btn {
+  color: var(--text-primary);
+}
+
+.terminal-tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 0 6px;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.terminal-tab-close:hover {
+  opacity: 1;
+  color: var(--text-primary);
+}
+
+.terminal-tab-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-right: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.terminal-tab-add:hover {
+  color: var(--text-primary);
+  background: var(--hover-bg);
+}
+
+.terminal-preview-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.75;
+}
+
 .terminal-title-btn {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: rgba(255, 255, 255, 0.03);
+  background: transparent;
   border: none;
-  border-right: 1px solid var(--border-color);
   color: inherit;
   cursor: pointer;
-  padding: 0 24px;
+  padding: 0 16px;
   height: 100%;
   margin: 0;
-  border-radius: 0; /* Integrated full-width style */
+  border-radius: 0;
   transition: all 0.2s ease;
   z-index: 2;
   position: relative;
-  flex: 1; /* Make it fill the header */
-  justify-content: flex-start;
+  flex-shrink: 0;
 }
 
 .terminal-title-btn::after {

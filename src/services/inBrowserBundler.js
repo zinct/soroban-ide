@@ -20,7 +20,12 @@
  * including subpath imports like `react-dom/client`.
  */
 
-import { detectFrontendRoot, collectFrontendFiles } from "../features/fullstack/fullstackBundler";
+import { detectFrontendRoot, collectPreviewFiles } from "../features/fullstack/fullstackBundler";
+import {
+  buildPreviewFreighterShimContents,
+  PREVIEW_FLAG_SCRIPT,
+} from "./previewWalletBridge";
+import { PREVIEW_CONSOLE_SCRIPT } from "./previewConsoleBridge";
 
 /**
  * Latest fullstack-workshop frontend sources from disk. Open workspaces keep
@@ -53,9 +58,11 @@ const sanitizeLegacyWorkshopSources = (filesMap) => {
   }
 };
 
-/** Replace workshop `src/*` with the latest template when this project is detected. */
+/** Replace workshop `src/*` only for the bundled workshop template project. */
 const overlayWorkshopFrontendSources = (filesMap) => {
+  const appSrc = filesMap.get("src/App.tsx") || filesMap.get("src/App.jsx") || "";
   if (!filesMap.has("src/sorobanClient.ts")) return;
+  if (!appSrc.includes("Soroban Counter")) return;
   for (const [key, content] of Object.entries(WORKSHOP_FRONTEND_SRC)) {
     const rel = key.replace(/^.*\/frontend\//, "");
     if (rel.startsWith("src/")) filesMap.set(rel, content);
@@ -213,42 +220,43 @@ const envDefines = (env) => {
   return out;
 };
 
+/** Merge workspace .env files with IDE-injected preview values. */
+const parsedEnvFromOptions = (options, parsedEnv) => {
+  const env = { ...parsedEnv };
+  if (options.walletAddress) {
+    env.VITE_WALLET_ADDRESS = options.walletAddress;
+  }
+  // Never overwrite a user .env contract id with an empty deploy fallback.
+  if (options.contractId) {
+    env.VITE_CONTRACT_ID = options.contractId;
+  }
+  if (options.network && !env.VITE_NETWORK) {
+    env.VITE_NETWORK = options.network;
+  }
+  return env;
+};
+
+const needsBufferPolyfill = (filesMap) => {
+  const pkgRaw = filesMap.get("package.json");
+  if (!pkgRaw) return true;
+  try {
+    const pkg = JSON.parse(pkgRaw);
+    const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+    return Boolean(
+      deps["@stellar/stellar-sdk"]
+      || deps["@stellar/stellar-base"]
+      || deps.buffer,
+    );
+  } catch {
+    return true;
+  }
+};
+
 // ── HTML splicing ────────────────────────────────────────────────────────
 /**
- * Small runtime error overlay injected into every preview document. Without
- * this, a failed CDN import or React crash shows up as a blank black iframe
- * with zero feedback in the parent panel.
- */
-const PREVIEW_ERROR_BOOTSTRAP = `<script>
-(function(){
-  function showPreviewError(msg) {
-    if (!msg) return;
-    var el = document.getElementById("__soroban_preview_err__");
-    if (!el) {
-      el = document.createElement("div");
-      el.id = "__soroban_preview_err__";
-      el.style.cssText = "position:fixed;inset:16px;z-index:99999;padding:16px 18px;background:rgba(26,0,0,0.96);border:1px solid #f85149;border-radius:10px;color:#fca5a5;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto;white-space:pre-wrap;pointer-events:auto;";
-      (document.body || document.documentElement).appendChild(el);
-    }
-    el.textContent = (el.textContent ? el.textContent + "\\n\\n" : "") + msg;
-  }
-  window.addEventListener("error", function(e) {
-    showPreviewError((e.error && e.error.stack) || e.message || "Script error");
-  });
-  window.addEventListener("unhandledrejection", function(e) {
-    var r = e.reason;
-    showPreviewError((r && r.stack) || (r && r.message) || String(r || "Unhandled promise rejection"));
-  });
-})();
-</script>`;
-
-/**
  * Replace the Vite entry script with a module `<script src="...">` pointing
- * at a blob URL, inject bundled CSS into `<head>`, and add the error overlay.
- *
- * We deliberately avoid inline module scripts: an external module blob loads
- * CDN imports (esm.sh) reliably, while inline modules + external imports are
- * flaky across browsers.
+ * at a blob URL, inject bundled CSS into `<head>`, and add preview bootstrap
+ * scripts (console bridge + wallet flag).
  */
 const composeFinalHtml = (indexHtml, jsModuleUrl, cssContent) => {
   let html = indexHtml;
@@ -273,9 +281,9 @@ const composeFinalHtml = (indexHtml, jsModuleUrl, cssContent) => {
   }
 
   if (html.includes("</head>")) {
-    html = html.replace("</head>", `${PREVIEW_ERROR_BOOTSTRAP}\n</head>`);
+    html = html.replace("</head>", `${PREVIEW_FLAG_SCRIPT}\n${PREVIEW_CONSOLE_SCRIPT}\n</head>`);
   } else {
-    html = PREVIEW_ERROR_BOOTSTRAP + "\n" + html;
+    html = PREVIEW_FLAG_SCRIPT + "\n" + PREVIEW_CONSOLE_SCRIPT + "\n" + html;
   }
 
   return html;
@@ -305,18 +313,20 @@ export async function bundleFrontendInBrowser(treeData, fileContents, options = 
   }
   onProgress({ stage: "collect", message: "Reading workspace files..." });
 
-  const files = collectFrontendFiles(detection.folder, fileContents || {});
+  const files = collectPreviewFiles(detection.folder, fileContents || {});
   if (files.length === 0) {
     throw new Error("No frontend files found to bundle.");
   }
 
   const filesMap = new Map();
   let indexHtml = null;
-  let envContent = "";
+  const parsedEnv = {};
   for (const { path, content } of files) {
     filesMap.set(path, content);
     if (path === "index.html") indexHtml = content;
-    if (path === ".env" || path === ".env.local") envContent = content;
+    if (/^\.env(\.|$)/.test(path)) {
+      Object.assign(parsedEnv, parseEnv(content));
+    }
   }
 
   overlayWorkshopFrontendSources(filesMap);
@@ -353,16 +363,8 @@ export async function bundleFrontendInBrowser(treeData, fileContents, options = 
 
   onProgress({ stage: "bundle", message: "Compiling sources & resolving npm imports..." });
 
-  const env = parseEnv(envContent);
-  if (options.walletAddress) {
-    env.VITE_WALLET_ADDRESS = options.walletAddress;
-  }
-  if (options.contractId !== undefined) {
-    env.VITE_CONTRACT_ID = options.contractId;
-  }
-  if (options.network) {
-    env.VITE_NETWORK = options.network;
-  }
+  const env = parsedEnvFromOptions(options, parsedEnv);
+  const useBufferPolyfill = needsBufferPolyfill(filesMap);
   if (env.VITE_CONTRACT_ID && env.VITE_CONTRACT_ID.startsWith("G")) {
     throw new Error(
       "VITE_CONTRACT_ID looks like a wallet address (starts with G). "
@@ -382,6 +384,7 @@ export async function bundleFrontendInBrowser(treeData, fileContents, options = 
       sourcemap: "inline",
       jsx: "automatic",
       define: envDefines(env),
+      inject: useBufferPolyfill ? ["soroban-buffer-polyfill"] : undefined,
       loader: {
         ".svg": "text",
         ".png": "dataurl",
@@ -391,7 +394,14 @@ export async function bundleFrontendInBrowser(treeData, fileContents, options = 
         ".webp": "dataurl",
         ".ico": "dataurl",
       },
-      plugins: [workspacePlugin(filesMap), cdnShimPlugin(filesMap), cdnPlugin(filesMap)],
+      plugins: [
+        bufferPolyfillPlugin(),
+        workspacePlugin(filesMap),
+        previewFreighterShimPlugin(filesMap),
+        stellarSdkCompatPlugin(filesMap),
+        cdnShimPlugin(filesMap),
+        cdnPlugin(filesMap),
+      ],
     });
   } catch (err) {
     // esbuild surfaces parse / resolution errors as thrown Errors with
@@ -545,12 +555,45 @@ const readPkgVersions = (filesMap) => {
   }
 };
 
+/** Minimum Stellar package versions for in-IDE preview (testnet Protocol 22+ XDR). */
+const PREVIEW_MIN_VERSIONS = {
+  "@stellar/stellar-sdk": "15.1.0",
+  "@stellar/freighter-api": "4.0.0",
+};
+
+const parseSemverParts = (version) =>
+  String(version || "0")
+    .replace(/^[^\d]*/, "")
+    .split(".")
+    .map((n) => parseInt(n, 10) || 0);
+
+const semverLt = (a, b) => {
+  const pa = parseSemverParts(a);
+  const pb = parseSemverParts(b);
+  for (let i = 0; i < 3; i += 1) {
+    if ((pa[i] || 0) < (pb[i] || 0)) return true;
+    if ((pa[i] || 0) > (pb[i] || 0)) return false;
+  }
+  return false;
+};
+
+const extractVersionFromRange = (range) =>
+  String(range || "").replace(/^[\^~>=<]+/, "").split(" ")[0];
+
 const pinNpmSpec = (spec, pkgVersions) => {
   const { pkgName, subpath } = parseNpmSpec(spec);
   const range = pkgVersions[pkgName];
-  if (!range) return spec;
-  const ver = String(range).replace(/^[\^~>=<]+/, "").split(" ")[0];
-  return `${pkgName}@${ver}${subpath}`;
+  const minVer = PREVIEW_MIN_VERSIONS[pkgName];
+
+  let ver = range ? extractVersionFromRange(range) : null;
+
+  if (minVer) {
+    if (!ver || semverLt(ver, minVer)) ver = minVer;
+    return `${pkgName}@${ver}${subpath}`;
+  }
+
+  if (ver) return `${pkgName}@${ver}${subpath}`;
+  return spec;
 };
 
 const buildEsmShUrl = (spec, pkgVersions, { exports } = {}) => {
@@ -566,19 +609,106 @@ const buildEsmShUrl = (spec, pkgVersions, { exports } = {}) => {
  * We bundle a tiny shim that default-imports from esm.sh and re-exports
  * named bindings so `{ getAddress }` imports work in the final output.
  */
-const CDN_SHIM_EXPORTS = {
-  "@stellar/freighter-api": [
-    "getAddress", "isConnected", "requestAccess", "signTransaction",
-    "signMessage", "signAuthEntry", "getNetwork", "getNetworkDetails",
-    "isAllowed", "setAllowed", "addToken", "WatchWalletChanges",
-  ],
-  "@stellar/stellar-sdk": [
-    "Address", "BASE_FEE", "Contract", "Networks", "TransactionBuilder",
-    "rpc", "xdr", "scValToNative", "Keypair", "Horizon", "StrKey",
-    "Transaction", "Account", "Operation", "Asset", "Memo",
-    "nativeToScVal", "scValToBigInt",
-  ],
-};
+const CDN_SHIM_EXPORTS = {};
+
+const FREIGHTER_API_PKG = "@stellar/freighter-api";
+const STELLAR_SDK_PKG = "@stellar/stellar-sdk";
+
+/** Freighter shim with parent-window bridge for blob preview iframes. */
+function previewFreighterShimPlugin(filesMap) {
+  const pkgVersions = readPkgVersions(filesMap);
+
+  return {
+    name: "preview-freighter-shim",
+    setup(build) {
+      build.onResolve({ filter: /.*/ }, (args) => {
+        if (!isBareNpmImport(args.path)) return null;
+        const { pkgName } = parseNpmSpec(args.path);
+        if (pkgName !== FREIGHTER_API_PKG) return null;
+        return { path: args.path, namespace: "preview-freighter" };
+      });
+
+      build.onLoad({ filter: /.*/, namespace: "preview-freighter" }, (args) => {
+        const url = buildEsmShUrl(args.path, pkgVersions);
+        return {
+          contents: buildPreviewFreighterShimContents(url),
+          loader: "js",
+        };
+      });
+    },
+  };
+}
+
+/** Named bindings re-exported from the stellar-sdk default export object. */
+const STELLAR_SDK_EXPORTS = [
+  "Address", "Asset", "Account", "Keypair", "MuxedAccount", "Claimant",
+  "Contract", "Networks", "TransactionBuilder", "Transaction", "FeeBumpTransaction",
+  "Operation", "Memo", "StrKey", "BASE_FEE", "xdr",
+  "scValToNative", "nativeToScVal", "scValToBigInt",
+  "LiquidityPoolAsset", "LiquidityPoolId", "FastSigning", "SigningKey",
+  "LiquidityPoolFeeV18", "TimeoutInfinite", "AuthRequiredFlag", "AuthRevocableFlag",
+  "AuthImmutableFlag", "AuthClawbackEnabledFlag",
+  "Config", "Utils", "Horizon", "Federation", "WebAuth", "Friendbot", "StellarToml",
+  "rpc", "contract",
+  "hash", "sign", "verify", "encodeMuxedAccount", "decodeMuxedAccount",
+  "getLiquidityPoolId", "MemoNone", "MemoID", "MemoText", "MemoHash", "MemoReturn",
+];
+
+function bufferPolyfillPlugin() {
+  const bufferUrl = "https://esm.sh/buffer@6.0.3?target=es2020&dev";
+  return {
+    name: "buffer-polyfill",
+    setup(build) {
+      build.onResolve({ filter: /^soroban-buffer-polyfill$/ }, () => ({
+        path: "soroban-buffer-polyfill",
+        namespace: "soroban-inject",
+      }));
+      build.onLoad({ filter: /.*/, namespace: "soroban-inject" }, () => ({
+        contents: [
+          `import { Buffer } from ${JSON.stringify(bufferUrl)};`,
+          "if (typeof globalThis.Buffer === \"undefined\") globalThis.Buffer = Buffer;",
+        ].join("\n"),
+        loader: "js",
+      }));
+    },
+  };
+}
+
+/**
+ * Default-import shim for @stellar/stellar-sdk. esm.sh exposes the package as a
+ * default export object; named `import { rpc } from "https://esm.sh/…"` fails at
+ * runtime. Re-export properties from the default object instead, and map legacy
+ * SorobanRpc → rpc for SDK v13+.
+ */
+function stellarSdkCompatPlugin(filesMap) {
+  const pkgVersions = readPkgVersions(filesMap);
+
+  return {
+    name: "stellar-sdk-compat",
+    setup(build) {
+      build.onResolve({ filter: /.*/ }, (args) => {
+        if (!isBareNpmImport(args.path)) return null;
+        const { pkgName } = parseNpmSpec(args.path);
+        if (pkgName !== STELLAR_SDK_PKG) return null;
+        return { path: args.path, namespace: "stellar-sdk-compat" };
+      });
+
+      build.onLoad({ filter: /.*/, namespace: "stellar-sdk-compat" }, (args) => {
+        const url = buildEsmShUrl(args.path, pkgVersions);
+        const lines = [
+          `import __pkg from ${JSON.stringify(url)};`,
+          "const __sdk = __pkg.default ?? __pkg;",
+          ...STELLAR_SDK_EXPORTS.map(
+            (name) => `export const ${name} = __sdk[${JSON.stringify(name)}];`,
+          ),
+          "export const SorobanRpc = __sdk.SorobanRpc ?? __sdk.rpc;",
+          "export default __sdk;",
+        ];
+        return { contents: lines.join("\n"), loader: "js" };
+      });
+    },
+  };
+}
 
 /**
  * Virtual modules for default-only CDN packages. esbuild inlines these into
@@ -625,7 +755,11 @@ function cdnPlugin(filesMap) {
       build.onResolve({ filter: /.*/ }, (args) => {
         if (!isBareNpmImport(args.path)) return null;
         const { pkgName } = parseNpmSpec(args.path);
-        if (CDN_SHIM_EXPORTS[pkgName]) return null;
+        if (
+          CDN_SHIM_EXPORTS[pkgName]
+          || pkgName === STELLAR_SDK_PKG
+          || pkgName === FREIGHTER_API_PKG
+        ) return null;
         return {
           path: buildEsmShUrl(args.path, pkgVersions),
           external: true,

@@ -31,14 +31,15 @@ const SKIP_DIR_NAMES = new Set([
   "coverage",
 ]);
 
-// Extensions we treat as binary blobs and skip — most frontends don't need
-// these at deploy time, and `fileContents` for them is often a data URL.
+// Extensions skipped for Vercel upload bundles (binaries rebuilt on CI).
 const SKIP_EXTS = new Set([
-  ".wasm", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".svg",
-  ".mp4", ".mov", ".webm", ".mp3", ".ogg", ".pdf", ".zip", ".tgz", ".gz",
+  ".wasm", ".mp4", ".mov", ".webm", ".mp3", ".ogg", ".pdf", ".zip", ".tgz", ".gz",
 ]);
-// (.svg can be text but is almost always served as an asset — Vercel's framework
-// detection handles that, we don't need to inline it here.)
+
+// Image/icon assets needed by the in-browser preview bundler.
+const PREVIEW_ASSET_EXTS = new Set([
+  ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico",
+]);
 
 // Files commonly used to anchor a "frontend" root. Presence boosts confidence.
 const FRONTEND_ANCHOR_FILES = [
@@ -115,7 +116,8 @@ const extOf = (name) => {
  * Returns an array of `{ path, content }` where `content` is whatever
  * `fileContents[id]` holds (typically a string).
  */
-export const collectFrontendFiles = (folderNode, fileContents) => {
+export const collectFrontendFiles = (folderNode, fileContents, options = {}) => {
+  const includePreviewAssets = options.includePreviewAssets === true;
   const out = [];
   const walk = (nodes, prefix) => {
     for (const node of nodes || []) {
@@ -125,7 +127,9 @@ export const collectFrontendFiles = (folderNode, fileContents) => {
         continue;
       }
       if (node.type !== "file") continue;
-      if (SKIP_EXTS.has(extOf(node.name))) continue;
+      const ext = extOf(node.name);
+      if (SKIP_EXTS.has(ext)) continue;
+      if (!includePreviewAssets && PREVIEW_ASSET_EXTS.has(ext)) continue;
 
       const content = fileContents?.[node.id];
       if (content === undefined || content === null) continue;
@@ -141,6 +145,10 @@ export const collectFrontendFiles = (folderNode, fileContents) => {
   walk(folderNode.children, "");
   return out;
 };
+
+/** Collect frontend files for the in-IDE preview (includes images/icons). */
+export const collectPreviewFiles = (folderNode, fileContents) =>
+  collectFrontendFiles(folderNode, fileContents, { includePreviewAssets: true });
 
 /**
  * SHA1 hex digest of a string or ArrayBuffer using SubtleCrypto.

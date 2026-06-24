@@ -1,12 +1,40 @@
 import React, { memo, useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { Plus, X } from "lucide-react";
 import { loadState, saveStateSection } from "../../utils/storage";
 import { executeTerminalCommand, isBackendCommand } from "./terminalCommands";
 import { collectProjectFiles, submitCommand, connectBuildStream, killCommand } from "../../services/backendService";
+import { formatPreviewLogEntry } from "../../services/previewConsoleBridge";
 
 const MIN_HEIGHT = 56;
 const COLLAPSE_THRESHOLD = 60;
 const DEFAULT_HEIGHT = 350;
 const MAX_HEIGHT = 600;
+const PREVIEW_TAB_ID = "preview";
+
+const WELCOME_LINES = [
+  { type: "output", content: "Welcome to Soroban Studio Terminal" },
+  { type: "output", content: "Type 'help' for available commands" },
+];
+
+const buildInitialTabs = (persisted, defaultCwd) => [
+  {
+    id: "shell-1",
+    kind: "shell",
+    title: "Terminal",
+    history: persisted?.history?.length ? persisted.history : WELCOME_LINES,
+    commandHistory: persisted?.commandHistory || [],
+    cwd: persisted?.cwd || defaultCwd,
+  },
+  {
+    id: PREVIEW_TAB_ID,
+    kind: "preview",
+    title: "Preview",
+    history: [{
+      type: "output",
+      content: "Preview console — UI logs and errors from the in-IDE preview appear here.",
+    }],
+  },
+];
 
 /**
  * Terminal panel with simulated shell + backend integration.
@@ -17,18 +45,20 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
   const [height, setHeight] = useState(() => persistedState?.height || DEFAULT_HEIGHT);
   const [isCollapsed, setIsCollapsed] = useState(() => persistedState?.isCollapsed ?? true);
   const [isDragging, setIsDragging] = useState(false);
-  const [history, setHistory] = useState(
-    () =>
-      persistedState?.history || [
-        { type: "output", content: "Welcome to Soroban Studio Terminal" },
-        { type: "output", content: "Type 'help' for available commands" },
-      ],
-  );
+  const [tabs, setTabs] = useState(() => buildInitialTabs(persistedState, currentDirectory));
+  const [activeTabId, setActiveTabId] = useState(() => persistedState?.activeTabId || "shell-1");
+  const [shellCounter, setShellCounter] = useState(() => persistedState?.shellCounter || 1);
   const [input, setInput] = useState("");
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [commandHistory, setCommandHistory] = useState(() => persistedState?.commandHistory || []);
-  const [cwd, setCwd] = useState(() => persistedState?.cwd || currentDirectory);
   const [isRunning, setIsRunning] = useState(false);
+
+  const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
+  const isPreviewTab = activeTab?.kind === "preview";
+  const history = activeTab?.history || [];
+  const commandHistory = activeTab?.kind === "shell" ? (activeTab.commandHistory || []) : [];
+  const cwd = activeTab?.kind === "shell" ? (activeTab.cwd || currentDirectory) : currentDirectory;
+  const shellTab = tabs.find((t) => t.id === activeTabId && t.kind === "shell");
+  const shellTabId = shellTab?.id || "shell-1";
 
   const terminalRef = useRef(null);
   const inputRef = useRef(null);
@@ -40,10 +70,84 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
   const activeJobIdRef = useRef(null);
   const lastSessionIdRef = useRef(null);
 
+  const appendToTab = useCallback((tabId, entry) => {
+    setTabs((prev) => prev.map((tab) => (
+      tab.id === tabId ? { ...tab, history: [...tab.history, entry] } : tab
+    )));
+  }, []);
+
+  const setTabHistory = useCallback((tabId, updater) => {
+    setTabs((prev) => prev.map((tab) => {
+      if (tab.id !== tabId) return tab;
+      const nextHistory = typeof updater === "function" ? updater(tab.history) : updater;
+      return { ...tab, history: nextHistory };
+    }));
+  }, []);
+
+  const updateShellTab = useCallback((tabId, patch) => {
+    setTabs((prev) => prev.map((tab) => (tab.id === tabId ? { ...tab, ...patch } : tab)));
+  }, []);
+
+  const expandTerminal = useCallback(() => {
+    if (isCollapsed) {
+      setIsCollapsed(false);
+      setHeight(previousHeight.current || DEFAULT_HEIGHT);
+    }
+  }, [isCollapsed]);
+
+  const executingTabRef = useRef("shell-1");
+  useEffect(() => {
+    if (shellTab?.id) executingTabRef.current = shellTab.id;
+  }, [shellTab?.id]);
+
+  const setShellCwd = useCallback((nextCwd) => {
+    const tabId = executingTabRef.current || shellTabId;
+    updateShellTab(tabId, { cwd: nextCwd });
+  }, [shellTabId, updateShellTab]);
+
+  const addShellTab = useCallback(() => {
+    const next = shellCounter + 1;
+    const id = `shell-${next}`;
+    setShellCounter(next);
+    setTabs((prev) => [
+      ...prev,
+      {
+        id,
+        kind: "shell",
+        title: `Terminal ${next}`,
+        history: [{ type: "output", content: "New terminal session" }],
+        commandHistory: [],
+        cwd: currentDirectory,
+      },
+    ]);
+    setActiveTabId(id);
+    expandTerminal();
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }, [shellCounter, currentDirectory, expandTerminal]);
+
+  const closeShellTab = useCallback((tabId) => {
+    if (tabId === PREVIEW_TAB_ID) return;
+    setTabs((prev) => {
+      const shells = prev.filter((t) => t.kind === "shell");
+      if (shells.length <= 1) return prev;
+      return prev.filter((t) => t.id !== tabId);
+    });
+    setActiveTabId((current) => (current === tabId ? "shell-1" : current));
+  }, []);
+
   // Save state without maximized
   useEffect(() => {
-    saveStateSection("terminal", { height, isCollapsed, history, commandHistory, cwd });
-  }, [height, isCollapsed, history, commandHistory, cwd]);
+    const primaryShell = tabs.find((t) => t.id === "shell-1") || tabs.find((t) => t.kind === "shell");
+    saveStateSection("terminal", {
+      height,
+      isCollapsed,
+      history: primaryShell?.history || [],
+      commandHistory: primaryShell?.commandHistory || [],
+      cwd: primaryShell?.cwd || currentDirectory,
+      activeTabId,
+      shellCounter,
+    });
+  }, [height, isCollapsed, tabs, activeTabId, shellCounter, currentDirectory]);
 
   // Cleanup WebSocket on unmount
   useEffect(() => {
@@ -121,10 +225,11 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
             }
 
             const className = msg.type === "error" ? "error" : msg.type === "info" ? "info" : "output";
-            setHistory((prev) => [...prev, { type: className, content: msg.content }]);
+            const tabId = executingTabRef.current || shellTabId;
+            appendToTab(tabId, { type: className, content: msg.content });
           },
           onError: (errorMsg) => {
-            setHistory((prev) => [...prev, { type: "error", content: `❌ ${errorMsg}` }]);
+            appendToTab(executingTabRef.current || shellTabId, { type: "error", content: `❌ ${errorMsg}` });
             setIsRunning(false);
             wsCleanupRef.current = null;
           },
@@ -134,11 +239,14 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
           },
         });
       } catch (err) {
-        setHistory((prev) => [...prev, { type: "error", content: `❌ ${err.message || "Failed to connect to build server"}` }]);
+        appendToTab(executingTabRef.current || shellTabId, {
+          type: "error",
+          content: `❌ ${err.message || "Failed to connect to build server"}`,
+        });
         setIsRunning(false);
       }
     },
-    [treeData, fileContents],
+    [treeData, fileContents, cwd, shellTabId, appendToTab],
   );
 
   /* ─── Command execution ─── */
@@ -149,24 +257,25 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
       if (!trimmedCmd) return;
       if (isRunning) return;
 
-      setHistory((prev) => [...prev, { type: "command", content: trimmedCmd, cwd: getShortPath(cwd) }]);
-      setCommandHistory((prev) => [...prev, trimmedCmd]);
+      executingTabRef.current = shellTabId;
+      setTabHistory(shellTabId, (prev) => [...prev, { type: "command", content: trimmedCmd, cwd: getShortPath(cwd) }]);
+      updateShellTab(shellTabId, { commandHistory: [...commandHistory, trimmedCmd] });
       setHistoryIndex(-1);
 
       // Route: stellar/cargo commands → backend, everything else → local
       if (isBackendCommand(trimmedCmd)) {
         executeBackendCommand(trimmedCmd);
       } else {
-        const output = executeTerminalCommand(trimmedCmd, cwd, setCwd, treeData);
+        const output = executeTerminalCommand(trimmedCmd, cwd, setShellCwd, treeData);
 
         if (output === null) {
-          setHistory([]);
+          setTabHistory(shellTabId, []);
         } else if (output) {
-          setHistory((prev) => [...prev, { type: "output", content: output }]);
+          setTabHistory(shellTabId, (prev) => [...prev, { type: "output", content: output }]);
         }
       }
     },
-    [cwd, getShortPath, isRunning, executeBackendCommand, treeData],
+    [cwd, getShortPath, isRunning, executeBackendCommand, treeData, shellTabId, commandHistory, setTabHistory, updateShellTab, setShellCwd],
   );
 
   /* ─── Resize handlers ─── */
@@ -250,27 +359,28 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
   // Also handles soroban:runCommand from Deploy panel.
   useEffect(() => {
     const handleToggle = () => toggleCollapse();
-    const handleClear = () => setHistory([]);
+    const handleClear = () => setTabHistory(activeTabId, []);
     const handleRunCommand = (e) => {
       const { cmd } = e.detail || {};
       if (!cmd) return;
-      // Expand terminal if collapsed
-      if (isCollapsed) {
-        setIsCollapsed(false);
-        setHeight(previousHeight.current || DEFAULT_HEIGHT);
-      }
+      expandTerminal();
+      executingTabRef.current = shellTabId;
       executeBackendCommand(cmd);
-      setHistory(prev => [...prev, { type: "command", content: cmd, cwd: "~/project" }]);
+      setTabHistory(shellTabId, (prev) => [...prev, { type: "command", content: cmd, cwd: "~/project" }]);
     };
     const handleAppend = (e) => {
-      const { type, content, cwd: entryCwd } = e.detail || {};
+      const { type, content, cwd: entryCwd, target } = e.detail || {};
       if (!content) return;
-      if (isCollapsed) {
-        setIsCollapsed(false);
-        setHeight(previousHeight.current || DEFAULT_HEIGHT);
-      }
+      expandTerminal();
+      const tabId = target === "preview" ? PREVIEW_TAB_ID : activeTabId;
       const className = type === "error" ? "error" : type === "command" ? "command" : "output";
-      setHistory(prev => [...prev, { type: className, content, cwd: entryCwd || "~/project" }]);
+      appendToTab(tabId, { type: className, content, cwd: entryCwd || "~/project" });
+    };
+    const handlePreviewLog = (e) => {
+      const entry = formatPreviewLogEntry(e.detail);
+      appendToTab(PREVIEW_TAB_ID, entry);
+      expandTerminal();
+      if (entry.type === "error") setActiveTabId(PREVIEW_TAB_ID);
     };
     const handleBusy = () => setIsRunning(true);
     const handleIdle = () => setIsRunning(false);
@@ -280,15 +390,17 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
     window.addEventListener("soroban:terminalAppend", handleAppend);
     window.addEventListener("soroban:terminalBusy", handleBusy);
     window.addEventListener("soroban:terminalIdle", handleIdle);
+    window.addEventListener("soroban:previewLog", handlePreviewLog);
     return () => {
       window.removeEventListener("soroban:toggleTerminal", handleToggle);
       window.removeEventListener("soroban:clearTerminal", handleClear);
       window.removeEventListener("soroban:runCommand", handleRunCommand);
       window.removeEventListener("soroban:terminalAppend", handleAppend);
+      window.removeEventListener("soroban:previewLog", handlePreviewLog);
       window.removeEventListener("soroban:terminalBusy", handleBusy);
       window.removeEventListener("soroban:terminalIdle", handleIdle);
     };
-  }, [toggleCollapse, isCollapsed, executeBackendCommand]);
+  }, [toggleCollapse, expandTerminal, executeBackendCommand, activeTabId, shellTabId, appendToTab, setTabHistory]);
 
   /* ─── Keyboard handling ─── */
 
@@ -324,7 +436,7 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
         if (matches.length === 1) setInput(matches[0]);
       } else if (e.key === "l" && e.ctrlKey) {
         e.preventDefault();
-        setHistory([]);
+        setTabHistory(activeTabId, []);
       } else if (e.key.toLowerCase() === "c" && (e.ctrlKey || e.metaKey)) {
         // Selection-aware Copy: if text is selected, allow browser to copy.
         const selection = window.getSelection()?.toString();
@@ -348,28 +460,31 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
             }
             setIsRunning(false);
             activeJobIdRef.current = null;
-            setHistory((prev) => [...prev, { type: "error", content: "^C — cancelled" }]);
+            appendToTab(executingTabRef.current || shellTabId, { type: "error", content: "^C — cancelled" });
           } else {
-            // Reset: clear the current input line and show ^C
             const currentInput = input;
-            setHistory((prev) => [...prev, { type: "command", content: currentInput + "^C", cwd: getShortPath(cwd) }]);
+            setTabHistory(shellTabId, (prev) => [
+              ...prev,
+              { type: "command", content: currentInput + "^C", cwd: getShortPath(cwd) },
+            ]);
             setInput("");
           }
         }
       }
     },
-    [input, historyIndex, commandHistory, handleExecute, isRunning, getShortPath, cwd],
+    [input, historyIndex, commandHistory, handleExecute, isRunning, getShortPath, cwd, activeTabId, shellTabId, setTabHistory, appendToTab],
   );
 
   const handleTerminalClick = useCallback(
     (e) => {
+      if (isPreviewTab) return;
       // Don't focus if user is selecting text
       if (window.getSelection()?.toString()) return;
       if (!isCollapsed && inputRef.current) {
         inputRef.current.focus({ preventScroll: true });
       }
     },
-    [isCollapsed],
+    [isCollapsed, isPreviewTab],
   );
 
   /* ─── Render helpers ─── */
@@ -412,8 +527,49 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
       <div className={`terminal-resize-handle ${isDragging ? "dragging" : ""}`} onMouseDown={handleMouseDown} />
 
       <div className="terminal-header">
+        <div className="terminal-tabs">
+          {tabs.map((tab) => (
+            <div
+              key={tab.id}
+              className={`terminal-tab ${activeTabId === tab.id ? "is-active" : ""}`}
+            >
+              <button
+                type="button"
+                className="terminal-tab-btn"
+                onClick={() => {
+                  setActiveTabId(tab.id);
+                  expandTerminal();
+                }}
+                title={tab.title}
+              >
+                {tab.title}
+              </button>
+              {tab.kind === "shell" && tabs.filter((t) => t.kind === "shell").length > 1 && (
+                <button
+                  type="button"
+                  className="terminal-tab-close"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeShellTab(tab.id);
+                  }}
+                  title="Close terminal"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            className="terminal-tab-add"
+            onClick={addShellTab}
+            title="New terminal"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
         <button className="terminal-title-btn" onClick={toggleCollapse} title={isCollapsed ? "Expand" : "Minimize"}>
-          <span className="terminal-title">Terminal</span>
+          <span className="terminal-title">{isCollapsed ? "Panel" : ""}</span>
         </button>
       </div>
 
@@ -435,6 +591,7 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
               {entry.type !== "command" && <pre className="terminal-output">{renderContentWithLinks(entry.content)}</pre>}
             </div>
           ))}
+          {!isPreviewTab && (
           <div className={`terminal-input-line ${isRunning ? "compiling" : ""}`}>
             {!isRunning ? (
               <span className="terminal-prompt-line">
@@ -465,6 +622,12 @@ const Terminal = memo(({ activeFileName, currentDirectory = "~/project", treeDat
               placeholder={isRunning ? "Press Ctrl+C to cancel..." : ""} 
             />
           </div>
+          )}
+          {isPreviewTab && (
+            <div className="terminal-preview-hint">
+              Read-only activity log: UI clicks, network calls, wallet signing, console output, and errors.
+            </div>
+          )}
           <div ref={windowEndRef} />
         </div>
       </div>
