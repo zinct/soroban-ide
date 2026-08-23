@@ -6,9 +6,11 @@
  *     entire repo tree instead of one request per folder.
  *   - Auto-attaches the signed-in user's OAuth token (via getStoredToken)
  *     so rate limits go from 60/hr anonymous to 5,000/hr authenticated.
- *   - Downloads file blobs from raw.githubusercontent.com, which is CDN-served
- *     and does not count against the REST API rate-limit bucket.
- *   - Limits concurrent file downloads so we don't starve the browser.
+ *   - Downloads the repository as one authenticated zipball whenever possible,
+ *     avoiding one network request per file.
+ *   - Falls back to the Git Trees + raw-file path if archive downloads are not
+ *     available in the current browser/proxy environment.
+ *   - Limits concurrent fallback file downloads so we don't starve the browser.
  */
 
 import { getStoredToken } from "./githubAuthService";
@@ -16,9 +18,10 @@ import { getStoredToken } from "./githubAuthService";
 const GITHUB_API_BASE = "https://api.github.com";
 const RAW_BASE = "https://raw.githubusercontent.com";
 
-// How many file blobs to fetch in parallel. Keep this modest so the browser
-// doesn't fan out hundreds of connections on large repos.
+// How many file blobs to fetch in parallel on the compatibility fallback. Keep
+// this modest so the browser doesn't fan out hundreds of connections.
 const MAX_FILE_CONCURRENCY = 8;
+const BASE64_CHUNK_SIZE = 0x8000;
 
 // ─── URL parsing ──────────────────────────────────────────────────────────
 
@@ -116,7 +119,7 @@ export const fetchRepoContents = async (owner, repo, path = "") => {
 // ─── File content download ────────────────────────────────────────────────
 
 const BINARY_EXTENSIONS = new Set([
-  "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico",
+  "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "ico",
   "pdf", "zip", "tar", "gz", "bz2", "7z",
   "exe", "dll", "so", "dylib",
   "woff", "woff2", "ttf", "otf", "eot",
@@ -130,18 +133,33 @@ const isBinaryFile = (filename) => {
 };
 
 export const fetchFileContent = async (downloadUrl, isBinary = false) => {
-  const response = await fetch(downloadUrl);
+  const token = getStoredToken();
+  const isTrustedRawUrl = typeof downloadUrl === "string" && downloadUrl.startsWith(`${RAW_BASE}/`);
+  const requestOptions = token && isTrustedRawUrl
+    ? { headers: { Authorization: `Bearer ${token}` } }
+    : undefined;
+  const response = await fetch(downloadUrl, requestOptions);
   if (!response.ok) {
     throw new Error(`Failed to fetch file: ${response.statusText}`);
   }
   if (isBinary) {
     const buffer = await response.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    let binary = "";
-    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-    return btoa(binary);
+    return bytesToBase64(new Uint8Array(buffer));
   }
   return response.text();
+};
+
+/**
+ * Convert bytes to base64 without spreading a whole file into one function
+ * call. The chunking keeps large images, fonts, and PDFs from overflowing the
+ * call stack and avoids repeatedly growing a string one byte at a time.
+ */
+const bytesToBase64 = (bytes) => {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += BASE64_CHUNK_SIZE) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + BASE64_CHUNK_SIZE));
+  }
+  return btoa(binary);
 };
 
 // ─── Concurrency-limited parallel map ─────────────────────────────────────
@@ -173,6 +191,59 @@ const fetchFullTree = async (owner, repo, ref) => {
   return response.json();
 };
 
+const reportCloneProgress = (onProgress, percent, message, details = {}) => {
+  if (typeof onProgress !== "function") return;
+
+  try {
+    onProgress({
+      percent: Math.max(0, Math.min(100, Math.round(percent))),
+      message,
+      ...details,
+    });
+  } catch (error) {
+    // Progress reporting is a UI enhancement and must never abort a clone.
+    console.warn("GitHub clone progress callback failed:", error?.message || error);
+  }
+};
+
+const readResponseBytes = async (response, onDownloadProgress) => {
+  const contentLength = Number(response.headers?.get?.("content-length"));
+  const totalBytes = Number.isFinite(contentLength) && contentLength > 0 ? contentLength : 0;
+  const reader = response.body?.getReader?.();
+
+  if (!reader) {
+    const buffer = await response.arrayBuffer();
+    onDownloadProgress?.({ loadedBytes: buffer.byteLength, totalBytes });
+    return buffer;
+  }
+
+  const chunks = [];
+  let loadedBytes = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value?.byteLength) continue;
+    chunks.push(value);
+    loadedBytes += value.byteLength;
+    onDownloadProgress?.({ loadedBytes, totalBytes });
+  }
+
+  const bytes = new Uint8Array(loadedBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes.buffer;
+};
+
+const fetchRepoArchive = async (owner, repo, ref, onDownloadProgress) => {
+  const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/zipball/${encodeURIComponent(ref)}`;
+  const response = await githubFetch(url);
+  return readResponseBytes(response, onDownloadProgress);
+};
+
 /**
  * Convert a flat Git Tree listing (paths with `/` separators) into a
  * nested {nodes, contents} structure compatible with the IDE's file tree.
@@ -180,7 +251,7 @@ const fetchFullTree = async (owner, repo, ref) => {
  * nodes are created lazily when needed so we don't depend on `type: "tree"`
  * entries appearing before their children (though GitHub does emit them).
  */
-const buildTreeFromFlatList = (entries, owner, repo, ref) => {
+const buildTreeFromEntries = (entries) => {
   const rootChildren = [];
   const folderMap = new Map(); // path -> children array
 
@@ -217,23 +288,19 @@ const buildTreeFromFlatList = (entries, owner, repo, ref) => {
       getFolder(parts);
     } else if (entry.type === "blob") {
       const parentChildren = getFolder(parts.slice(0, -1));
-      const binary = isBinaryFile(name);
-      const rawUrl = `${RAW_BASE}/${owner}/${repo}/${ref}/${entry.path
-        .split("/")
-        .map(encodeURIComponent)
-        .join("/")}`;
+      const binary = entry.binary ?? isBinaryFile(name);
       const node = {
         id: entry.path,
         name,
         type: "file",
         children: [],
         path: entry.path,
-        download_url: rawUrl,
+        ...(entry.downloadUrl ? { download_url: entry.downloadUrl } : {}),
         isBinary: binary,
-        size: entry.size,
+        ...(entry.size !== undefined ? { size: entry.size } : {}),
       };
       parentChildren.push(node);
-      files.push({ node, binary, rawUrl });
+      files.push({ node, binary, loadContent: entry.loadContent });
     }
     // "commit" entries (submodules) are ignored.
   }
@@ -241,45 +308,189 @@ const buildTreeFromFlatList = (entries, owner, repo, ref) => {
   return { nodes: rootChildren, files };
 };
 
+const buildTreeFromFlatList = (entries, owner, repo, ref) => {
+  const rawRef = ref
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/");
+
+  const normalizedEntries = entries.map((entry) => {
+    if (entry.type !== "blob") return entry;
+
+    const binary = isBinaryFile(entry.path);
+    const rawUrl = `${RAW_BASE}/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${rawRef}/${entry.path
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/")}`;
+
+    return {
+      ...entry,
+      binary,
+      downloadUrl: rawUrl,
+      loadContent: () => fetchFileContent(rawUrl, binary),
+    };
+  });
+
+  return buildTreeFromEntries(normalizedEntries);
+};
+
+const normalizeArchivePath = (archiveName, archiveRoot) => {
+  let path = archiveName.replace(/\\/g, "/").replace(/^\/+/, "");
+  if (archiveRoot && path === archiveRoot) return "";
+  if (archiveRoot && path.startsWith(`${archiveRoot}/`)) {
+    path = path.slice(archiveRoot.length + 1);
+  }
+
+  const parts = path.split("/").filter((part) => part && part !== ".");
+  if (parts.some((part) => part === "..")) return null;
+  return parts.join("/");
+};
+
+/**
+ * Turn a GitHub zipball into the same tree/file descriptors as the raw-file
+ * fallback. GitHub archives contain one generated top-level directory, which
+ * is stripped so the IDE still shows paths relative to the repository root.
+ */
+const buildTreeFromArchive = async (archiveBuffer, owner, repo, ref) => {
+  const { default: JSZip } = await import("jszip");
+  const archive = await JSZip.loadAsync(archiveBuffer);
+  const zipEntries = Object.values(archive.files);
+  const firstPath = zipEntries.find((entry) => entry.name)?.name || "";
+  const archiveRoot = firstPath.split("/").filter(Boolean)[0] || "";
+  const rawRef = ref
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/");
+
+  const entries = [];
+  for (const zipEntry of zipEntries) {
+    const path = normalizeArchivePath(zipEntry.name, archiveRoot);
+    if (!path) continue;
+
+    if (zipEntry.dir) {
+      entries.push({ type: "tree", path });
+      continue;
+    }
+
+    const binary = isBinaryFile(path);
+    const rawUrl = `${RAW_BASE}/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${rawRef}/${path
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/")}`;
+
+    entries.push({
+      type: "blob",
+      path,
+      binary,
+      downloadUrl: rawUrl,
+      loadContent: async () => {
+        if (binary) {
+          return bytesToBase64(await zipEntry.async("uint8array"));
+        }
+        return zipEntry.async("string");
+      },
+    });
+  }
+
+  return buildTreeFromEntries(entries);
+};
+
 // ─── Public: clone a repository ───────────────────────────────────────────
 
-export const cloneRepository = async (githubUrl) => {
+export const cloneRepository = async (githubUrl, onProgress) => {
   const parsed = parseGithubUrl(githubUrl);
   if (!parsed) {
     throw new Error("Invalid GitHub URL. Please use format: https://github.com/owner/repo");
   }
 
   const { owner, repo, branch: urlBranch } = parsed;
+  let lastReportedPercent = -1;
+  const report = (percent, message, details = {}) => {
+    const roundedPercent = Math.max(lastReportedPercent, Math.max(0, Math.min(100, Math.round(percent))));
+    if (roundedPercent === lastReportedPercent && !details.force) return;
+    lastReportedPercent = roundedPercent;
+    reportCloneProgress(onProgress, roundedPercent, message, details);
+  };
 
+  report(0, "Starting clone...");
+  report(5, "Loading repository metadata...");
   const repoInfo = await fetchRepoInfo(owner, repo);
   // Use branch from URL (e.g. /tree/feature-x) if present, else repo default.
   const defaultBranch = urlBranch || repoInfo.default_branch || "main";
 
-  const tree = await fetchFullTree(owner, repo, defaultBranch);
-  if (tree.truncated) {
-    // Fallback path: the repo is larger than what the recursive trees API
-    // can return (>100k entries / ~7MB). Very rare for Soroban projects;
-    // surface a clear message rather than silently returning a partial tree.
-    throw new Error(
-      "Repository is too large to clone via the GitHub API. Please clone a subdirectory or use a smaller repo."
+  let workspaceSource;
+  let sourceType = "archive";
+  try {
+    // The archive endpoint returns the whole snapshot in one request and also
+    // works for private repositories when the stored OAuth token is attached.
+    report(8, "Preparing repository archive...");
+    workspaceSource = await buildTreeFromArchive(
+      await fetchRepoArchive(owner, repo, defaultBranch, ({ loadedBytes, totalBytes }) => {
+        if (totalBytes > 0) {
+          const downloadRatio = Math.min(1, loadedBytes / totalBytes);
+          report(10 + downloadRatio * 55, "Downloading repository archive...", {
+            loadedBytes,
+            totalBytes,
+            indeterminate: false,
+          });
+        } else {
+          report(10, "Downloading repository archive...", {
+            loadedBytes,
+            totalBytes,
+            indeterminate: true,
+          });
+        }
+      }),
+      owner,
+      repo,
+      defaultBranch,
     );
+    report(70, "Unpacking repository archive...");
+  } catch (archiveError) {
+    // Some browser/proxy combinations block the archive redirect. Preserve
+    // the existing tree/raw implementation as a compatibility fallback.
+    sourceType = "tree";
+    console.warn("GitHub archive download unavailable; falling back to file downloads:", archiveError?.message || archiveError);
+
+    report(20, "Reading repository tree...", { force: true, indeterminate: false });
+    const tree = await fetchFullTree(owner, repo, defaultBranch);
+    if (tree.truncated) {
+      throw new Error(
+        "Repository is too large to clone via the GitHub API. Please clone a subdirectory or use a smaller repo."
+      );
+    }
+
+    report(38, "Building repository file tree...", { force: true, indeterminate: false });
+    workspaceSource = buildTreeFromFlatList(tree.tree || [], owner, repo, defaultBranch);
   }
 
-  const { nodes, files } = buildTreeFromFlatList(tree.tree || [], owner, repo, defaultBranch);
+  const { nodes, files } = workspaceSource;
+  const contentStart = sourceType === "archive" ? 72 : 42;
+  const contentEnd = 96;
+  report(contentStart, files.length ? `Loading files (0/${files.length})...` : "Finalizing clone...", {
+    force: true,
+    indeterminate: false,
+  });
 
   // Download file contents in parallel with a concurrency cap. Failures on
   // individual files don't abort the whole clone — we substitute a placeholder
   // so the user still gets a working workspace and can retry a single file.
   const contents = {};
-  await parallelMap(files, MAX_FILE_CONCURRENCY, async ({ node, binary, rawUrl }) => {
+  let completedFiles = 0;
+  await parallelMap(files, MAX_FILE_CONCURRENCY, async ({ node, binary, loadContent }) => {
     try {
-      contents[node.id] = await fetchFileContent(rawUrl, binary);
+      contents[node.id] = await loadContent();
     } catch (err) {
       console.warn(`Failed to fetch ${node.path}:`, err?.message || err);
       contents[node.id] = binary ? "" : `// Error loading ${node.name}\n`;
+    } finally {
+      completedFiles += 1;
+      const fileRatio = files.length ? completedFiles / files.length : 1;
+      report(contentStart + fileRatio * (contentEnd - contentStart), `Loading files (${completedFiles}/${files.length})...`);
     }
   });
 
+  report(100, "Clone complete.", { force: true, indeterminate: false });
   const rootName = repoInfo.name || repo;
   const wrappedTree = [
     {

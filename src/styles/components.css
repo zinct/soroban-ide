@@ -432,6 +432,59 @@
   border-radius: 4px;
 }
 
+.github-clone-dialog .clone-progress {
+  margin: 2px 0 16px;
+}
+
+.github-clone-dialog .clone-progress-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border-color) 70%, transparent);
+}
+
+.github-clone-dialog .clone-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent);
+  transition: width 180ms ease-out;
+}
+
+.github-clone-dialog .clone-progress-fill.indeterminate {
+  width: 38%;
+  animation: github-clone-progress 1.15s ease-in-out infinite;
+}
+
+.github-clone-dialog .clone-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 7px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.github-clone-dialog .clone-progress-meta span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.github-clone-dialog .clone-progress-meta span:last-child {
+  flex-shrink: 0;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes github-clone-progress {
+  0% { transform: translateX(-120%); }
+  50% { transform: translateX(160%); }
+  100% { transform: translateX(300%); }
+}
+
 .github-clone-dialog .clone-status.loading {
   color: var(--text-secondary);
 }

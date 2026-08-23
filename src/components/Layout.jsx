@@ -52,6 +52,7 @@ const Layout = () => {
   const [showGithubClone, setShowGithubClone] = useState(false);
   const [githubUrl, setGithubUrl] = useState("");
   const [cloneStatus, setCloneStatus] = useState(null);
+  const [cloneProgress, setCloneProgress] = useState(null);
   const [lastSessionId, setLastSessionId] = useState(null);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
@@ -399,26 +400,48 @@ const Layout = () => {
     setShowCreateMenu(false);
     setGithubUrl("");
     setCloneStatus(null);
+    setCloneProgress(null);
   }, []);
 
-  const handleCloneGithub = useCallback(async () => {
-    if (!githubUrl.trim()) return;
+  const runGithubClone = useCallback(
+    async (url) => {
+      const handleProgress = (progress) => {
+        setCloneProgress(progress);
+        setCloneStatus({ type: "loading", message: progress.message || "Cloning repository..." });
+      };
 
-    const execute = async () => {
-      setCloneStatus({ type: "loading", message: "Fetching repository from GitHub..." });
+      handleProgress({ percent: 0, message: "Starting clone...", indeterminate: false });
 
       try {
-        await workspace.cloneFromGithub(githubUrl);
+        await workspace.cloneFromGithub(url, handleProgress);
         tabManager.resetTabs();
         window.dispatchEvent(new CustomEvent("soroban:clearTerminal"));
-        setCloneStatus({ type: "success", message: "Repository cloned successfully!" });
+        const successMessage = "Repository cloned successfully!";
+        setCloneProgress({ percent: 100, message: successMessage, indeterminate: false });
+        setCloneStatus({ type: "success", message: successMessage });
+        return { ok: true };
+      } catch (err) {
+        setCloneProgress(null);
+        setCloneStatus({ type: "error", message: err?.message || "Failed to clone repository" });
+        return { ok: false, error: err };
+      }
+    },
+    [workspace, tabManager],
+  );
+
+  const handleCloneGithub = useCallback(async () => {
+    const url = githubUrl.trim();
+    if (!url) return;
+
+    const execute = async () => {
+      const result = await runGithubClone(url);
+      if (result.ok) {
         setTimeout(() => {
           setShowGithubClone(false);
           setCloneStatus(null);
+          setCloneProgress(null);
           setGithubUrl("");
         }, 1500);
-      } catch (err) {
-        setCloneStatus({ type: "error", message: err.message || "Failed to clone repository" });
       }
     };
 
@@ -428,7 +451,7 @@ const Layout = () => {
       message: "Are you sure you want to clone this repository? This will replace your current workspace files.",
       onConfirm: execute,
     });
-  }, [githubUrl, workspace, tabManager]);
+  }, [githubUrl, runGithubClone]);
 
   /** Load a GitHub repo URL into the workspace (same as Clone from GitHub, friendlier copy from the GitHub panel). */
   const handleOpenGithubRepository = useCallback(
@@ -437,14 +460,17 @@ const Layout = () => {
       if (!url) return;
 
       const execute = async () => {
-        try {
-          await workspace.cloneFromGithub(url);
-          tabManager.resetTabs();
-          window.dispatchEvent(new CustomEvent("soroban:clearTerminal"));
+        setGithubUrl(url);
+        setShowGithubClone(true);
+        const result = await runGithubClone(url);
+        if (result.ok) {
           window.dispatchEvent(new CustomEvent("soroban:setSidebarPanel", { detail: { panel: "explorer" } }));
-        } catch (err) {
-          const msg = err?.message || "Could not open repository";
-          window.alert(msg);
+          setTimeout(() => {
+            setShowGithubClone(false);
+            setCloneStatus(null);
+            setCloneProgress(null);
+            setGithubUrl("");
+          }, 1500);
         }
       };
 
@@ -455,7 +481,7 @@ const Layout = () => {
         onConfirm: execute,
       });
     },
-    [workspace, tabManager],
+    [runGithubClone],
   );
 
   /* ─── Command Palette ─── */
@@ -892,23 +918,62 @@ const Layout = () => {
         </div>
       </div>
 
-      <div className={`github-clone-overlay ${showGithubClone ? "visible" : ""}`} onClick={(e) => e.target === e.currentTarget && setShowGithubClone(false)}>
+      <div
+        className={`github-clone-overlay ${showGithubClone ? "visible" : ""}`}
+        onClick={(e) => {
+          if (e.target === e.currentTarget && cloneStatus?.type !== "loading") {
+            setShowGithubClone(false);
+            setCloneProgress(null);
+          }
+        }}>
         <div className="github-clone-dialog">
           <h3>Clone GitHub Repository</h3>
           <input
             type="text"
             placeholder="https://github.com/username/repository.git"
             value={githubUrl}
+            disabled={cloneStatus?.type === "loading"}
             onChange={(e) => {
               setGithubUrl(e.target.value);
-              if (cloneStatus?.type === "error") setCloneStatus(null);
+              if (cloneStatus?.type === "error") {
+                setCloneStatus(null);
+                setCloneProgress(null);
+              }
             }}
             onKeyDown={(e) => e.key === "Enter" && handleCloneGithub()}
             autoFocus
           />
-          {cloneStatus && <div className={`clone-status ${cloneStatus.type}`}>{cloneStatus.message}</div>}
+          {cloneStatus?.type === "loading" && cloneProgress && (
+            <div
+              className="clone-progress"
+              role="progressbar"
+              aria-label={cloneProgress.message || "Cloning repository"}
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow={cloneProgress.indeterminate ? undefined : cloneProgress.percent}>
+              <div className="clone-progress-track">
+                <div
+                  className={`clone-progress-fill ${cloneProgress.indeterminate ? "indeterminate" : ""}`}
+                  style={cloneProgress.indeterminate ? undefined : { width: `${cloneProgress.percent}%` }}
+                />
+              </div>
+              <div className="clone-progress-meta">
+                <span>{cloneProgress.message}</span>
+                <span>{cloneProgress.indeterminate ? "Working…" : `${cloneProgress.percent}%`}</span>
+              </div>
+            </div>
+          )}
+          {cloneStatus && cloneStatus.type !== "loading" && <div className={`clone-status ${cloneStatus.type}`}>{cloneStatus.message}</div>}
           <div className="dialog-buttons">
-            <button className="btn btn-secondary" onClick={() => setShowGithubClone(false)}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                if (cloneStatus?.type !== "loading") {
+                  setShowGithubClone(false);
+                  setCloneProgress(null);
+                }
+              }}
+              disabled={cloneStatus?.type === "loading"}>
               Cancel
             </button>
             <button className="btn btn-primary" onClick={handleCloneGithub} disabled={cloneStatus?.type === "loading"}>

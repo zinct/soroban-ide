@@ -251,8 +251,8 @@ export const useWorkspaceState = () => {
     return { tree, contents };
   }, []);
 
-  const cloneFromGithub = useCallback(async (url) => {
-    const { tree, contents, repoName } = await cloneRepository(url, uniqueId);
+  const cloneFromGithub = useCallback(async (url, onProgress) => {
+    const { tree, contents, repoName } = await cloneRepository(url, onProgress);
     clearState();
     setTreeData(tree);
     setFileContents(contents);
